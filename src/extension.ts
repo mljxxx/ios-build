@@ -5,16 +5,12 @@ import * as buildInfo from './buildinfo';
 import * as fs from 'fs';
 import path = require('path');
 const { exec,spawn} = require("child_process");
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
+
+
 export function activate(context: vscode.ExtensionContext) {
     let diagnosticCollection : vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection("oc-error");
     let outputChannel = vscode.window.createOutputChannel("ios-build");
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
+
     let workspaceConfig = vscode.workspace.getConfiguration("ios.build");
     let clang : string|undefined = workspaceConfig.get("clang");
     let workspace : string|undefined = workspaceConfig.get("workspace");
@@ -23,6 +19,8 @@ export function activate(context: vscode.ExtensionContext) {
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
+    let podCachePath : string |undefined = workspaceConfig.get("podCachePath");
+    let podPid : number = -1;
     
 	let disposable = vscode.commands.registerCommand('ios-build.Run', async () => {
         diagnosticCollection.clear();
@@ -32,16 +30,11 @@ export function activate(context: vscode.ExtensionContext) {
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             buildApp("build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
-            // const workPath : string = workspaceRoot.concat("/.vscode");
-            
         }
-        // The code you place here will be executed every time your command is executed
-        // Display a message box to the user
     });
     let stopDisposable = vscode.commands.registerCommand('ios-build.Stop', async () => {
         await stopBuild();
         await stopRun();
-        // vscode.window.showInformationMessage("ALL STOP");
     });
     
     let cleanDisposable = vscode.commands.registerCommand('ios-build.Clean', async () => {
@@ -62,7 +55,31 @@ export function activate(context: vscode.ExtensionContext) {
             runApp(workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
         }
     });
+    let podInstallDisposable = vscode.commands.registerCommand('ios-build.PodInstall', async () => {
+        const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+        if(workspaceFolder !== undefined) {
+            let pid :number | undefined = podInstall(workspaceFolder,workspace, outputChannel);
+            if(pid !== undefined) {
+                podPid = pid;
+            }
+        }
+    });
+
+    let podCleanDisposable = vscode.commands.registerCommand('ios-build.PodClean', async () => {
+        podClean(podCachePath);
+    });
+    
+    let podStopDisposable = vscode.commands.registerCommand('ios-build.PodStop', async () => {
+        podStop(podPid);
+        podPid = -1;
+    });
     context.subscriptions.push(disposable);
+    context.subscriptions.push(stopDisposable);
+    context.subscriptions.push(cleanDisposable);
+    context.subscriptions.push(runDisposable);
+    context.subscriptions.push(podInstallDisposable);
+    context.subscriptions.push(podCleanDisposable);
+    context.subscriptions.push(podStopDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -81,6 +98,10 @@ function execShell(cmd:string,workPath?:string) : Promise<string> {
     });
 }
 
+function sleep(ms: number | undefined) : Promise<string> {
+    return new Promise(resolve=>setTimeout(resolve, ms));
+};
+
 async function stopBuild() {
     let output : string = await execShell("killall xcodebuild");
     // console.log(output);
@@ -89,9 +110,55 @@ async function stopRun() {
     let output : string = await execShell("killall ios-deploy");
     // console.log(output);
 }
-function sleep(ms: number | undefined) : Promise<string> {
-    return new Promise(resolve=>setTimeout(resolve, ms));
-};
+
+function podStop(podPid : number) {
+    if(podPid !== -1) {
+        process.kill(-podPid);
+        vscode.window.showInformationMessage("Pod Install Interrupted");
+    } else {
+        vscode.window.showInformationMessage("Pod Install Not Process");
+    }
+    // console.log(output);
+}
+
+async function podClean(podCachePath:string | undefined) {
+    if(podCachePath === undefined) {
+        vscode.window.showErrorMessage("Pod Cache Path Not Config");
+        return;
+    }
+    let output : string = await execShell(`rm -rf ${podCachePath}`);
+    vscode.window.showInformationMessage("Pod Clean Compeleted");
+    // console.log(output);
+}
+
+function podInstall(workspaceFolder: string,workspace : string|undefined,outputChannel : vscode.OutputChannel):number|undefined {
+    if(workspace === undefined) {
+        vscode.window.showErrorMessage("Build Configuration Error");
+        return;
+    }
+    outputChannel.clear();
+    workspace = workspace.replace('${workspaceFolder}', workspaceFolder);
+    let workSpaceDir : string =  path.dirname(workspace);
+    let args : string[] = ["exec","pod","install"];
+    outputChannel.show();
+    let proc = spawn("bundle", args, { cwd: workSpaceDir, detached: true });
+    proc.unref();
+    proc.stdout.on('data', async (data: Buffer) => {
+        const text: string = data.toString("utf-8");
+        outputChannel.append(text);
+    });
+
+    proc.stderr.on('data', (data: Buffer) => {
+        console.log(data.toString("utf-8"));
+        outputChannel.append(data.toString("utf-8"));
+    });
+
+    proc.on('close', (data: Buffer) => {
+        console.log(data.toString("utf-8"));
+        vscode.window.showInformationMessage("Pod Install Compeleted");
+    });
+    return proc.pid;
+}
 
 function runApp(workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
     if(scheme === undefined || sdk === undefined || configuration===undefined || derivedDataPath === undefined) {
