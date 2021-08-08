@@ -12,7 +12,9 @@
   ],
   "activationEvents": [
     "onCommand:ios-build.Run",
-    "onCommand:ios-build.Stop"
+    "onCommand:ios-build.Stop",
+    "onCommand:ios-build.Clean",
+    "onCommand:ios-build.RunWithoutBuild"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -24,6 +26,14 @@
       {
         "command": "ios-build.Stop",
         "title": "iOS Stop"
+      },
+      {
+        "command": "ios-build.Clean",
+        "title": "iOS Clean"
+      },
+      {
+        "command": "ios-build.RunWithoutBuild",
+        "title": "iOS Run Without Build"
       }
     ]
   },
