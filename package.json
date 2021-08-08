@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "norminal",
   "engines": {
     "vscode": "^1.59.0"
@@ -34,6 +34,56 @@
       {
         "command": "ios-build.RunWithoutBuild",
         "title": "iOS Run Without Build"
+      }
+    ],
+    "configuration": [{
+				"title": "ios.build Configration",
+				"properties": {
+					"ios.build": {
+            "default":"",
+            "properties": {
+              "clang" : {
+                "type": "string",
+                "default": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+                "description": "clang Path"
+              }, 
+              "workspace":{
+                "type": "string",
+                "default": "",
+                "description": "workspace Path"
+              }, 
+              "scheme":{
+                "type": "string",
+                "default": "",
+                "description": "scheme"
+              }, 
+              "configuration":{
+                "type": "string",
+                "enum": [
+                  "Debug",
+                  "Release"
+                ],
+                "default": "Debug",
+                "description": "build mode"
+              }, 
+              "sdk":{
+                "type": "string",
+                "default": "",
+                "description": "sdk"
+              },
+              "arch":{
+                "type": "string",
+                "default": "",
+                "description": "arch"
+              },
+              "derivedDataPath":{
+                "type": "string",
+                "default": "${workspaceFolder}/DerivedData",
+                "description": "derivedDataPath"
+              }
+            }
+					}
+				}
       }
     ]
   },
