@@ -36,28 +36,29 @@
         "title": "iOS Run Without Build"
       }
     ],
-    "configuration": [{
-				"title": "ios.build Configration",
-				"properties": {
-					"ios.build": {
-            "default":"",
+    "configuration": [
+      {
+        "title": "ios.build Configration",
+        "properties": {
+          "ios.build": {
+            "default": "",
             "properties": {
-              "clang" : {
+              "clang": {
                 "type": "string",
                 "default": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
                 "description": "clang Path"
-              }, 
-              "workspace":{
+              },
+              "workspace": {
                 "type": "string",
                 "default": "",
                 "description": "workspace Path"
-              }, 
-              "scheme":{
+              },
+              "scheme": {
                 "type": "string",
                 "default": "",
                 "description": "scheme"
-              }, 
-              "configuration":{
+              },
+              "configuration": {
                 "type": "string",
                 "enum": [
                   "Debug",
@@ -65,25 +66,25 @@
                 ],
                 "default": "Debug",
                 "description": "build mode"
-              }, 
-              "sdk":{
+              },
+              "sdk": {
                 "type": "string",
                 "default": "",
                 "description": "sdk"
               },
-              "arch":{
+              "arch": {
                 "type": "string",
                 "default": "",
                 "description": "arch"
               },
-              "derivedDataPath":{
+              "derivedDataPath": {
                 "type": "string",
                 "default": "${workspaceFolder}/DerivedData",
                 "description": "derivedDataPath"
               }
             }
-					}
-				}
+          }
+        }
       }
     ]
   },

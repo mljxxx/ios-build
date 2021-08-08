@@ -1,25 +1,28 @@
+// import { Diagnostic } from "vscode";
+
 export namespace BuildInfo {
 
-    export interface SecondaryLocation {
+    export interface Location {
         startingColumnNumber: number;
         endingColumnNumber: number;
         documentURLString: string;
         endingLineNumber: number;
         startingLineNumber: number;
     }
-    export interface Location {
+    export interface FileLocation {
         documentURLString: string;
     }
-
     export interface Message {
         categoryIdent: string;
-        secondaryLocations: SecondaryLocation[];
         location: Location;
         title: string;
+        severity : number;
     }
 
     export interface SubSection {
         messages: Message[];
+        text : string;
+        location : FileLocation;
     }
 
     export interface MainSection {
