@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as buildInfo from './buildinfo';
 import * as fs from 'fs';
 import path = require('path');
+import { isNumber } from 'util';
 const { exec,spawn} = require("child_process");
 
 
@@ -240,34 +241,54 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
-    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO SWIFT_INDEX_STORE_ENABLE=NO MTL_ENABLE_INDEX_STORE=NO CLANG_DEBUG_MODULES=NO`
-    + ` | tee xcodebuild.txt`;
+    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO`
+    + ` | tee xcodebuild.txt | xcpretty`;
     let workPath : string = workspaceFolder.concat("/.vscode");
-    let output: string = await execShell(shellCommand, workPath);
-    
-    if(output.search("CLEAN SUCCEEDED") !== -1) {
-        vscode.window.showInformationMessage("CLEAN SUCCEEDED");
-    } else if(output.search("BUILD SUCCEEDED") !== -1) {
-        vscode.window.showInformationMessage("BUILD SUCCEEDED");
-        runApp(workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
-    } else if(output.search("BUILD INTERRUPTED") !== -1){
-        vscode.window.showInformationMessage("BUILD INTERRUPTED");
-    } else {
-        vscode.window.showInformationMessage("BUILD FAILED");
-        let fileFindCommand: string = `ls -dt ${derivedDataPath}/Logs/Build/*.xcactivitylog | head -n 1`;
-        let file: string = await execShell(fileFindCommand);
-        if(file.search("no matches found") !== -1) {
-            vscode.window.showErrorMessage("Build Log Not Exists");
-        } else {
-            file = file.trimEnd();
-            let rmFileCommand: string = "rm -f xcodebuild.json";
-            let rmFileLog: string = await execShell(rmFileCommand, workPath);
-            let parseCommand: string = `xclogparser dump --file  ${file} --output xcodebuild.json`;
-            let parseLog: string = await execShell(parseCommand, workPath);
-            console.log(parseLog);
-            sendDiagnostic(diagnosticCollection,workPath,outputChannel);
+    let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
+    proc.unref();
+    outputChannel.show();
+    proc.stdout.on('data', (data: Buffer) => {
+        const output: string = data.toString("utf-8");
+        outputChannel.append(output);
+    });
+    proc.stderr.on('data',(data: Buffer) => {
+        const output: string = data.toString("utf-8");
+        outputChannel.append(output);
+        if (output.search("BUILD INTERRUPTED") !== -1) {
+            vscode.window.showInformationMessage("BUILD INTERRUPTED");
         }
-    }
+    });
+
+    proc.on('exit', async (data: Buffer | number) => {
+        if(typeof data === 'number') {
+            vscode.window.showInformationMessage("BUILD INTERRUPTED");
+            return;
+        }
+        const output: string = data.toString("utf-8");
+        if (output.search("CLEAN SUCCEEDED") !== -1) {
+            vscode.window.showInformationMessage("CLEAN SUCCEEDED");
+        } else if (output.search("BUILD SUCCEEDED") !== -1) {
+            vscode.window.showInformationMessage("BUILD SUCCEEDED");
+            runApp(workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
+        } else if (output.search("BUILD FAILED") !== -1) {
+            vscode.window.showInformationMessage("BUILD FAILED");
+            let fileFindCommand: string = `ls -dt ${derivedDataPath}/Logs/Build/*.xcactivitylog | head -n 1`;
+            let file: string = await execShell(fileFindCommand);
+            if (file.search("no matches found") !== -1) {
+                vscode.window.showErrorMessage("Build Log Not Exists");
+            } else {
+                file = file.trimEnd();
+                let rmFileCommand: string = "rm -f xcodebuild.json";
+                let rmFileLog: string = await execShell(rmFileCommand, workPath);
+                let parseCommand: string = `xclogparser dump --file  ${file} --output xcodebuild.json`;
+                let parseLog: string = await execShell(parseCommand, workPath);
+                outputChannel.append(parseLog);
+                sendDiagnostic(diagnosticCollection, workPath, outputChannel);
+            }
+        } else if (output.search("BUILD INTERRUPTED") !== -1) {
+            vscode.window.showInformationMessage("BUILD INTERRUPTED");
+        }
+    });
 }
 
 function sendDiagnostic(diagnosticCollection : vscode.DiagnosticCollection,workPath : String,outputChannel : vscode.OutputChannel) {
