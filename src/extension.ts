@@ -238,7 +238,10 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     }
     workspace = workspace.replace('${workspaceFolder}', workspaceFolder);
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
-    let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}` + ` | tee xcodebuild.txt`;
+    let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
+    + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
+    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO SWIFT_INDEX_STORE_ENABLE=NO MTL_ENABLE_INDEX_STORE=NO CLANG_DEBUG_MODULES=NO`
+    + ` | tee xcodebuild.txt`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let output: string = await execShell(shellCommand, workPath);
     
@@ -321,16 +324,23 @@ function parseDiagnostic(message: buildInfo.BuildInfo.Message) : DiagnosticData 
 }
 
 function getDocumentWorkspaceFolder(): string | undefined {
-    const fileName = vscode.window.activeTextEditor?.document.fileName;
-    return vscode.workspace.workspaceFolders
-        ?.map((folder) => folder.uri.fsPath)
-        .filter((fsPath) => fileName?.startsWith(fsPath))[0];
+    let folders : readonly vscode.WorkspaceFolder[] | undefined =  vscode.workspace.workspaceFolders;
+    if(folders !== undefined) {
+        let folder:vscode.WorkspaceFolder = folders[0];
+        return folder.uri.fsPath;
+    } else {
+        return undefined;
+    }
+    // const fileName = vscode.window.activeTextEditor?.document.fileName;
+    // return vscode.workspace.workspaceFolders
+    //     ?.map((folder) => folder.uri.fsPath)
+    //     .filter((fsPath) => fileName?.startsWith(fsPath))[0];
 }
 
 export class DiagnosticData {
-    diagnostic:vscode.Diagnostic | undefined;
-    severity : number;
-    constructor(){
+    diagnostic: vscode.Diagnostic | undefined;
+    severity: number;
+    constructor() {
         this.severity = 0;
         this.diagnostic = undefined;
     }
