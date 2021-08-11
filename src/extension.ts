@@ -201,6 +201,7 @@ function runApp(workspaceFolder: string,scheme:string | undefined,configuration 
                                     "script lldb.debugger.GetSelectedTarget().modules[0].SetPlatformFileSpec(lldb.SBFileSpec(\\"${appPath}\\"))",
                                 ],
                                 "processCreateCommands": [
+                                    "command script import ${workPath}/fhlldb.py",                                    
                                     "process connect connect://127.0.0.1:33333",
                                     "run"
                                 ]
@@ -241,10 +242,11 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
-    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO`
+    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES`
     + ` | tee xcodebuild.txt | xcpretty`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
+    let isBuildFailed : Boolean = false;
     proc.unref();
     outputChannel.show();
     proc.stdout.on('data', (data: Buffer) => {
@@ -256,21 +258,25 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
         outputChannel.append(output);
         if (output.search("BUILD INTERRUPTED") !== -1) {
             vscode.window.showInformationMessage("BUILD INTERRUPTED");
+        } else if (output.search("BUILD FAILED") !== -1) {
+            isBuildFailed = true;
         }
     });
 
-    proc.on('exit', async (data: Buffer | number) => {
-        if(typeof data === 'number') {
-            vscode.window.showInformationMessage("BUILD INTERRUPTED");
-            return;
-        }
-        const output: string = data.toString("utf-8");
+    proc.on('exit', async (data: Buffer) => {
+        let output : string = await execShell("tail -n 2 xcodebuild.txt",workPath);
         if (output.search("CLEAN SUCCEEDED") !== -1) {
             vscode.window.showInformationMessage("CLEAN SUCCEEDED");
         } else if (output.search("BUILD SUCCEEDED") !== -1) {
             vscode.window.showInformationMessage("BUILD SUCCEEDED");
             runApp(workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
+        }  else if (output.search("BUILD INTERRUPTED") !== -1) {
+            vscode.window.showInformationMessage("BUILD INTERRUPTED");
         } else if (output.search("BUILD FAILED") !== -1) {
+            isBuildFailed = true;
+        }
+        
+        if(isBuildFailed) {
             vscode.window.showInformationMessage("BUILD FAILED");
             let fileFindCommand: string = `ls -dt ${derivedDataPath}/Logs/Build/*.xcactivitylog | head -n 1`;
             let file: string = await execShell(fileFindCommand);
@@ -285,8 +291,6 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
                 outputChannel.append(parseLog);
                 sendDiagnostic(diagnosticCollection, workPath, outputChannel);
             }
-        } else if (output.search("BUILD INTERRUPTED") !== -1) {
-            vscode.window.showInformationMessage("BUILD INTERRUPTED");
         }
     });
 }
