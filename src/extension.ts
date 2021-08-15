@@ -1,11 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import * as buildInfo from './buildinfo';
-import * as fs from 'fs';
-import path = require('path');
-import { isNumber } from 'util';
-const { exec,spawn} = require("child_process");
+const {exec,spawn} = require("child_process");
 
 
 export function activate(context: vscode.ExtensionContext) {
@@ -20,9 +16,6 @@ export function activate(context: vscode.ExtensionContext) {
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
-    let podCachePath : string |undefined = workspaceConfig.get("podCachePath");
-    let podPid : number = -1;
-    
 	let disposable = vscode.commands.registerCommand('ios-build.Run', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
@@ -56,31 +49,10 @@ export function activate(context: vscode.ExtensionContext) {
             runApp(workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
         }
     });
-    let podInstallDisposable = vscode.commands.registerCommand('ios-build.PodInstall', async () => {
-        const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
-        if(workspaceFolder !== undefined) {
-            let pid :number | undefined = podInstall(workspaceFolder,workspace, outputChannel);
-            if(pid !== undefined) {
-                podPid = pid;
-            }
-        }
-    });
-
-    let podCleanDisposable = vscode.commands.registerCommand('ios-build.PodClean', async () => {
-        podClean(podCachePath);
-    });
-    
-    let podStopDisposable = vscode.commands.registerCommand('ios-build.PodStop', async () => {
-        podStop(podPid);
-        podPid = -1;
-    });
     context.subscriptions.push(disposable);
     context.subscriptions.push(stopDisposable);
     context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(runDisposable);
-    context.subscriptions.push(podInstallDisposable);
-    context.subscriptions.push(podCleanDisposable);
-    context.subscriptions.push(podStopDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -108,57 +80,8 @@ async function stopBuild() {
     // console.log(output);
 }
 async function stopRun() {
-    let output : string = await execShell("killall ios-deploy");
+    let output : string = await execShell("killall ios-deploy-custom");
     // console.log(output);
-}
-
-function podStop(podPid : number) {
-    if(podPid !== -1) {
-        process.kill(-podPid);
-        vscode.window.showInformationMessage("Pod Install Interrupted");
-    } else {
-        vscode.window.showInformationMessage("Pod Install Not Process");
-    }
-    // console.log(output);
-}
-
-async function podClean(podCachePath:string | undefined) {
-    if(podCachePath === undefined) {
-        vscode.window.showErrorMessage("Pod Cache Path Not Config");
-        return;
-    }
-    let output : string = await execShell(`rm -rf ${podCachePath}`);
-    vscode.window.showInformationMessage("Pod Clean Compeleted");
-    // console.log(output);
-}
-
-function podInstall(workspaceFolder: string,workspace : string|undefined,outputChannel : vscode.OutputChannel):number|undefined {
-    if(workspace === undefined) {
-        vscode.window.showErrorMessage("Build Configuration Error");
-        return;
-    }
-    outputChannel.clear();
-    workspace = workspace.replace('${workspaceFolder}', workspaceFolder);
-    let workSpaceDir : string =  path.dirname(workspace);
-    let args : string[] = ["exec","pod","install"];
-    outputChannel.show();
-    let proc = spawn("bundle", args, { cwd: workSpaceDir, detached: true });
-    proc.unref();
-    proc.stdout.on('data', async (data: Buffer) => {
-        const text: string = data.toString("utf-8");
-        outputChannel.append(text);
-    });
-
-    proc.stderr.on('data', (data: Buffer) => {
-        console.log(data.toString("utf-8"));
-        outputChannel.append(data.toString("utf-8"));
-    });
-
-    proc.on('close', (data: Buffer) => {
-        console.log(data.toString("utf-8"));
-        vscode.window.showInformationMessage("Pod Install Compeleted");
-    });
-    return proc.pid;
 }
 
 function runApp(workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
@@ -168,50 +91,17 @@ function runApp(workspaceFolder: string,scheme:string | undefined,configuration 
     }
     let workPath : string = workspaceFolder.concat("/.vscode");
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
-    sdk = sdk.replace(new RegExp("[0-9]","g"),'');
-    sdk = sdk.replace(new RegExp("\\.","g"),'');
+    sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
-    let args : string[] = ["-N","-b",executePath,"-p","33333"];
+    let shellCommand :string = `ios-deploy-custom -N -b ${executePath} -p 33333 -P ${workPath}`;
     outputChannel.show();
-    let proc = spawn("ios-deploy", args, { cwd: workPath, detached: true });
+    let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
     proc.stdout.on('data', async (data: Buffer) => {
         const text: string = data.toString("utf-8");
-        if (text.search("App path") !== -1) {
-            let appPath = "";
-            let compile:RegExp =  new RegExp("App path: (.*)","g");
-            let res = compile.exec(text);
-            res?.forEach(value => {
-                appPath = value;
-            });
-            appPath.replace("App path: ","");
-            if(appPath !== ""){
-                let launchJson = `
-                    {
-                        "version": "0.2.0",
-                        "configurations": [
-                            {
-                                "type": "lldb",
-                                "request": "custom",
-                                "name": "Debug",
-                                "cwd": "${workspaceFolder}",
-                                "initCommands": [
-                                    "platform select remote-ios",
-                                    "target create \\"${executePath}\\"",
-                                    "script lldb.debugger.GetSelectedTarget().modules[0].SetPlatformFileSpec(lldb.SBFileSpec(\\"${appPath}\\"))",
-                                ],
-                                "processCreateCommands": [
-                                    "command script import ${workPath}/fhlldb.py",                                    
-                                    "process connect connect://127.0.0.1:33333",
-                                    "run"
-                                ]
-                            }
-                        ]
-                    }`;
-                fs.writeFileSync(`${workPath}/launch.json`,launchJson);
-                await sleep(500);
-                vscode.commands.executeCommand("workbench.action.debug.start");
-            }
+        if (text.search("Launch JSON write Completed") !== -1) {
+            await sleep(500);
+            vscode.commands.executeCommand("workbench.action.debug.start");
         }
         console.log(text);
         outputChannel.append(text);
@@ -243,7 +133,7 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
     + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES`
-    + ` | tee xcodebuild.txt | xcpretty`;
+    + ` | tee xcodebuild.txt | xcpretty --no-utf`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     let isBuildFailed : Boolean = false;
@@ -252,6 +142,7 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     proc.stdout.on('data', (data: Buffer) => {
         const output: string = data.toString("utf-8");
         outputChannel.append(output);
+        postErrorMessage(diagnosticCollection,output);
     });
     proc.stderr.on('data',(data: Buffer) => {
         const output: string = data.toString("utf-8");
@@ -259,7 +150,7 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
         if (output.search("BUILD INTERRUPTED") !== -1) {
             vscode.window.showInformationMessage("BUILD INTERRUPTED");
         } else if (output.search("BUILD FAILED") !== -1) {
-            isBuildFailed = true;
+            vscode.window.showInformationMessage("BUILD FAILED");
         }
     });
 
@@ -273,79 +164,26 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
         }  else if (output.search("BUILD INTERRUPTED") !== -1) {
             vscode.window.showInformationMessage("BUILD INTERRUPTED");
         } else if (output.search("BUILD FAILED") !== -1) {
-            isBuildFailed = true;
-        }
-        
-        if(isBuildFailed) {
             vscode.window.showInformationMessage("BUILD FAILED");
-            let fileFindCommand: string = `ls -dt ${derivedDataPath}/Logs/Build/*.xcactivitylog | head -n 1`;
-            let file: string = await execShell(fileFindCommand);
-            if (file.search("no matches found") !== -1) {
-                vscode.window.showErrorMessage("Build Log Not Exists");
-            } else {
-                file = file.trimEnd();
-                let rmFileCommand: string = "rm -f xcodebuild.json";
-                let rmFileLog: string = await execShell(rmFileCommand, workPath);
-                let parseCommand: string = `xclogparser dump --file  ${file} --output xcodebuild.json`;
-                let parseLog: string = await execShell(parseCommand, workPath);
-                outputChannel.append(parseLog);
-                sendDiagnostic(diagnosticCollection, workPath, outputChannel);
-            }
         }
     });
 }
 
-function sendDiagnostic(diagnosticCollection : vscode.DiagnosticCollection,workPath : String,outputChannel : vscode.OutputChannel) {
-    const fileName: string = workPath.concat("/xcodebuild.json");
-    if (fs.existsSync(fileName)) {
-        let entries: [vscode.Uri, readonly vscode.Diagnostic[] | undefined][] = [];
-        const buildMessage: buildInfo.BuildInfo.BuildMessage = JSON.parse(fs.readFileSync(fileName, "utf-8"));
-        console.log(buildMessage);
-        buildMessage.mainSection.subSections.forEach(section => {
-            let diagnosticArray: vscode.Diagnostic[] = [];
-            let needLog : Boolean = false;
-            section.messages.forEach(messsage => {
-                let diagnosticData: DiagnosticData = parseDiagnostic(messsage);
-                if(diagnosticData.diagnostic !== undefined){
-                    diagnosticArray.push(diagnosticData.diagnostic);
-                }
-                if(diagnosticData.severity === 2) {
-                    needLog = true;
-                } 
-            });
-            if(needLog) {
-                if(diagnosticArray.length > 0) {
-                    let filePath = section.location.documentURLString.replace("file://", "");
-                    let path: vscode.Uri = vscode.Uri.file(filePath);
-                    entries.push([path, diagnosticArray]);
-                } else {
-                    outputChannel.append(section.text);
-                    outputChannel.show();
-                    console.log(section.text);
-                }
-            }
-        });
-        diagnosticCollection.set(entries);
-    }
-}
-
-function parseDiagnostic(message: buildInfo.BuildInfo.Message) : DiagnosticData {
-    let data : DiagnosticData = new DiagnosticData();
-    if(message.severity === 2 && message.categoryIdent !== undefined && message.location.documentURLString !== "") {
-        let location: buildInfo.BuildInfo.Location = message.location;
-        let startPosition: vscode.Position = new vscode.Position(location.startingLineNumber, location.startingColumnNumber);
-        let endPosition: vscode.Position = new vscode.Position(location.endingLineNumber, location.endingColumnNumber);
+function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,text:string){
+    let errorMessagePattern = new RegExp(/\[x\]\s(.*?):(\d+):(\d+):\s(.*?)\n/,"g");
+    let errorMessage : RegExpExecArray | null = null;
+    while(errorMessage = errorMessagePattern.exec(text)) {
+        let filePath : string = errorMessage[1];
+        let lineNumber : string = errorMessage[2];
+        let columnNumber : string = errorMessage[3];
+        let errorInfo : string = errorMessage[4];
+        let startPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
+        let endPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
         let range: vscode.Range = new vscode.Range(startPosition, endPosition);
-        let filePath = location.documentURLString.replace("file://", "");
         let path: vscode.Uri = vscode.Uri.file(filePath);
-        let diagnostic: vscode.Diagnostic = new vscode.Diagnostic(range, message.title);
-        //let infoLacation : vscode.Location = new vscode.Location(path,range);
-        // let diagnosticRelatedInformation : vscode.DiagnosticRelatedInformation = new vscode.DiagnosticRelatedInformation(infoLacation,message.categoryIdent);
-        // diagnostic.relatedInformation?.push(diagnosticRelatedInformation);
-        data.diagnostic = diagnostic;
+        let diagnostic: vscode.Diagnostic = new vscode.Diagnostic(range, errorInfo);
+        diagnosticCollection.set(path,[diagnostic]);
     }
-    data.severity = message.severity;
-    return data;
 }
 
 function getDocumentWorkspaceFolder(): string | undefined {
@@ -355,18 +193,5 @@ function getDocumentWorkspaceFolder(): string | undefined {
         return folder.uri.fsPath;
     } else {
         return undefined;
-    }
-    // const fileName = vscode.window.activeTextEditor?.document.fileName;
-    // return vscode.workspace.workspaceFolders
-    //     ?.map((folder) => folder.uri.fsPath)
-    //     .filter((fsPath) => fileName?.startsWith(fsPath))[0];
-}
-
-export class DiagnosticData {
-    diagnostic: vscode.Diagnostic | undefined;
-    severity: number;
-    constructor() {
-        this.severity = 0;
-        this.diagnostic = undefined;
     }
 }

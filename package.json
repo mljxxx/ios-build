@@ -14,10 +14,7 @@
     "onCommand:ios-build.Run",
     "onCommand:ios-build.Stop",
     "onCommand:ios-build.Clean",
-    "onCommand:ios-build.RunWithoutBuild",
-    "onCommand:ios-build.PodInstall",
-    "onCommand:ios-build.PodClean",
-    "onCommand:ios-build.PodStop"
+    "onCommand:ios-build.RunWithoutBuild"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -37,16 +34,6 @@
       {
         "command": "ios-build.RunWithoutBuild",
         "title": "iOS Run Without Build"
-      },
-      {
-        "command": "ios-build.PodInstall",
-        "title": "iOS Pod Install"
-      },{
-        "command": "ios-build.PodClean",
-        "title": "iOS Pod Clean"
-      },{
-        "command": "ios-build.PodStop",
-        "title": "iOS Pod Stop"
       }
     ],
     "configuration": [
@@ -94,11 +81,6 @@
                 "type": "string",
                 "default": "${workspaceFolder}/DerivedData",
                 "description": "derivedDataPath"
-              },
-              "podCachePath": {
-                "type": "string",
-                "default": "/Users/${username}/Library/Caches/CocoaPods/v1",
-                "description": "podCachePath"
               }
             }
           }
