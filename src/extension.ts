@@ -99,7 +99,7 @@ function runApp(workspaceFolder: string,scheme:string | undefined,configuration 
     proc.unref();
     proc.stdout.on('data', async (data: Buffer) => {
         const text: string = data.toString("utf-8");
-        if (text.search("Launch JSON write Completed") !== -1) {
+        if (text.search("Launch JSON Write Completed") !== -1) {
             await sleep(500);
             vscode.commands.executeCommand("workbench.action.debug.start");
         }
