@@ -1,5 +1,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 const {exec,spawn} = require("child_process");
 
@@ -133,10 +134,9 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
     + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES`
-    + ` | tee xcodebuild.txt | xcpretty --no-utf`;
+    + ` | tee xcodebuild.txt | xcpretty --no-utf --report json-compilation-database --output compile_commands_update.json`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
-    let isBuildFailed : Boolean = false;
     proc.unref();
     outputChannel.show();
     proc.stdout.on('data', (data: Buffer) => {
@@ -166,6 +166,8 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
         } else if (output.search("BUILD FAILED") !== -1) {
             vscode.window.showInformationMessage("BUILD FAILED");
         }
+        await sleep(1000);
+        produceCompileCommand(workPath,outputChannel);
     });
 }
 
@@ -186,6 +188,31 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
     }
 }
 
+function produceCompileCommand(workPath:string,outputChannel : vscode.OutputChannel){
+    let compileCommandArray : commandModel[] = [];
+    let compileCommandUpdatePath : string = workPath.concat("/compile_commands_update.json");
+    if(fs.existsSync(compileCommandUpdatePath)) {
+        let updateCompileCommand : commandModel[] = JSON.parse(fs.readFileSync(compileCommandUpdatePath,"utf-8"));
+        compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
+        fs.unlink(compileCommandUpdatePath,(err: NodeJS.ErrnoException | null) => {});
+    }
+    let compileCommandPath : string = workPath.concat("/compile_commands.json");
+    if(fs.existsSync(compileCommandPath)) {
+        let updateCompileCommand : commandModel[] = JSON.parse(fs.readFileSync(compileCommandPath,"utf-8"));
+        compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
+    }
+    let compileCommand : commandModel[] = [];
+    let modelMap = new Map();
+    compileCommandArray.forEach(model => {
+        if(fs.existsSync(model.file) && !modelMap.has(model.file)) {
+            modelMap.set(model.file,1);
+            compileCommand.push(model);
+        }
+    });
+    let compileCommandJSON : string = JSON.stringify(compileCommand);
+    fs.writeFile(compileCommandPath,compileCommandJSON,"utf-8",(err: NodeJS.ErrnoException | null) => {});
+}
+
 function getDocumentWorkspaceFolder(): string | undefined {
     let folders : readonly vscode.WorkspaceFolder[] | undefined =  vscode.workspace.workspaceFolders;
     if(folders !== undefined) {
@@ -194,4 +221,11 @@ function getDocumentWorkspaceFolder(): string | undefined {
     } else {
         return undefined;
     }
+}
+
+
+interface commandModel {
+    command: string;
+    file: string;
+    directory: string;
 }
