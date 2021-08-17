@@ -1,35 +1,39 @@
 # ios-build README
 
-
-## Features
-
-
 ## Requirements
+https://github.com/mljxxx/ios-deploy
+https://github.com/xcpretty/xcpretty
 
 ## Extension Settings
+```
+ "ios.build": {
+        "clang": "",                //clang path
+        "workspace": "",            //workspace path
+        "scheme": "",               //scheme
+        "configuration": "",        //build mode debug/release
+        "arch": "",                 //build arch
+        "sdk": "",                  //sdk
+        "derivedDataPath": ""      //derivedDataPath
+}
+```
+## Command
+```
+"command": "ios-build.Build"                //Build
+"title": "iOS Build"
 
+"command": "ios-build.Clean"                //Clean Build
+"title": "iOS Build Clean"
 
-## Known Issues
+"command": "ios-build.buildAndRun"          //Build And Run
+"title": "iOS Build & Run"
 
+"command": "ios-build.Stop"                 //Stop Build And Stop Run
+"title": "iOS Stop"
 
-## Release Notes
+"command": "ios-build.installAndRun"        //Install And Run
+"title": "iOS Install & Run"
 
-
-
-### 1.0.0
-
-
------------------------------------------------------------------------------------------------------------
-## Following extension guidelines
-
-
-## Working with Markdown
-
-**Note:** You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
-
-
-
-### For more information
-
-
+"command": "ios-build.runWithoutInstall"    //Run Without Install
+"title": "iOS Run"
+```
 **Enjoy!**

@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "norminal",
   "engines": {
     "vscode": "^1.59.0"
@@ -11,29 +11,38 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:ios-build.Run",
-    "onCommand:ios-build.Stop",
+    "onCommand:ios-build.Build",
     "onCommand:ios-build.Clean",
-    "onCommand:ios-build.RunWithoutBuild"
+    "onCommand:ios-build.buildAndRun",
+    "onCommand:ios-build.Stop",
+    "onCommand:ios-build.installAndRun",
+    "onCommand:ios-build.runWithoutInstall"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ios-build.Run",
-        "title": "iOS Run"
+        "command": "ios-build.Build",
+        "title": "iOS Build"
+      },{
+        "command": "ios-build.Clean",
+        "title": "iOS Build Clean"
+      },
+      {
+        "command": "ios-build.buildAndRun",
+        "title": "iOS Build & Run"
       },
       {
         "command": "ios-build.Stop",
         "title": "iOS Stop"
       },
       {
-        "command": "ios-build.Clean",
-        "title": "iOS Clean"
+        "command": "ios-build.installAndRun",
+        "title": "iOS Install & Run"
       },
       {
-        "command": "ios-build.RunWithoutBuild",
-        "title": "iOS Run Without Build"
+        "command": "ios-build.runWithoutInstall",
+        "title": "iOS Run"
       }
     ],
     "configuration": [

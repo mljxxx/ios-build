@@ -17,14 +17,23 @@ export function activate(context: vscode.ExtensionContext) {
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
-	let disposable = vscode.commands.registerCommand('ios-build.Run', async () => {
+	let buildDisposable = vscode.commands.registerCommand('ios-build.Build', async () => {
+        diagnosticCollection.clear();
+        outputChannel.clear();
+        await stopBuild();
+        const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+        if(workspaceFolder !== undefined) {
+            buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+        }
+    });
+	let buildAndRunDisposable = vscode.commands.registerCommand('ios-build.buildAndRun', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
         await stopBuild();
         await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp("build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+            buildApp(true,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
         }
     });
     let stopDisposable = vscode.commands.registerCommand('ios-build.Stop', async () => {
@@ -36,24 +45,34 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.clear();
         diagnosticCollection.clear();
         await stopBuild();
-        await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp("clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+            buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
         }
     });
-    let runDisposable = vscode.commands.registerCommand('ios-build.RunWithoutBuild', async () => {
+    let installAndRunDisposable = vscode.commands.registerCommand('ios-build.installAndRun', async () => {
         outputChannel.clear();
         await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            runApp(workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
+            runApp(true,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
         }
     });
-    context.subscriptions.push(disposable);
+    
+    let runWithoutInstallDisposable = vscode.commands.registerCommand('ios-build.runWithoutInstall', async () => {
+        outputChannel.clear();
+        await stopRun();
+        const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+        if(workspaceFolder !== undefined) {
+            runApp(false,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
+        }
+    });
+    context.subscriptions.push(buildDisposable);
     context.subscriptions.push(stopDisposable);
     context.subscriptions.push(cleanDisposable);
-    context.subscriptions.push(runDisposable);
+    context.subscriptions.push(buildAndRunDisposable);
+    context.subscriptions.push(installAndRunDisposable);
+    context.subscriptions.push(runWithoutInstallDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -85,7 +104,7 @@ async function stopRun() {
     // console.log(output);
 }
 
-function runApp(workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
+function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
     if(scheme === undefined || sdk === undefined || configuration===undefined || derivedDataPath === undefined) {
         vscode.window.showErrorMessage("Build Configuration Error");
         return;
@@ -94,7 +113,8 @@ function runApp(workspaceFolder: string,scheme:string | undefined,configuration 
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
-    let shellCommand :string = `ios-deploy-custom -N -b ${executePath} -p 33333 -P ${workPath}`;
+    let installArg = install ? '' : '-m';
+    let shellCommand :string = `ios-deploy-custom -N ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
     outputChannel.show();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
@@ -119,7 +139,7 @@ function runApp(workspaceFolder: string,scheme:string | undefined,configuration 
     });
 }
 
-async function buildApp(buildAction:string,workspaceFolder: string,clang : string|undefined,workspace : string|undefined,
+async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,clang : string|undefined,workspace : string|undefined,
     scheme : string|undefined,configuration : string|undefined,sdk : string|undefined,arch : string|undefined,
     derivedDataPath : string|undefined,diagnosticCollection : vscode.DiagnosticCollection,outputChannel : vscode.OutputChannel) {
     if(workspace===undefined || scheme===undefined || configuration===undefined || sdk===undefined || arch===undefined ||derivedDataPath===undefined) {
@@ -160,7 +180,9 @@ async function buildApp(buildAction:string,workspaceFolder: string,clang : strin
             vscode.window.showInformationMessage("CLEAN SUCCEEDED");
         } else if (output.search("BUILD SUCCEEDED") !== -1) {
             vscode.window.showInformationMessage("BUILD SUCCEEDED");
-            runApp(workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
+            if(run) {
+                runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
+            }
         }  else if (output.search("BUILD INTERRUPTED") !== -1) {
             vscode.window.showInformationMessage("BUILD INTERRUPTED");
         } else if (output.search("BUILD FAILED") !== -1) {
@@ -189,19 +211,19 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
 }
 
 function produceCompileCommand(workPath:string,outputChannel : vscode.OutputChannel){
-    let compileCommandArray : commandModel[] = [];
+    let compileCommandArray : CommandModel[] = [];
     let compileCommandUpdatePath : string = workPath.concat("/compile_commands_update.json");
     if(fs.existsSync(compileCommandUpdatePath)) {
-        let updateCompileCommand : commandModel[] = JSON.parse(fs.readFileSync(compileCommandUpdatePath,"utf-8"));
+        let updateCompileCommand : CommandModel[] = JSON.parse(fs.readFileSync(compileCommandUpdatePath,"utf-8"));
         compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
         fs.unlink(compileCommandUpdatePath,(err: NodeJS.ErrnoException | null) => {});
     }
     let compileCommandPath : string = workPath.concat("/compile_commands.json");
     if(fs.existsSync(compileCommandPath)) {
-        let updateCompileCommand : commandModel[] = JSON.parse(fs.readFileSync(compileCommandPath,"utf-8"));
+        let updateCompileCommand : CommandModel[] = JSON.parse(fs.readFileSync(compileCommandPath,"utf-8"));
         compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
     }
-    let compileCommand : commandModel[] = [];
+    let compileCommand : CommandModel[] = [];
     let modelMap = new Map();
     compileCommandArray.forEach(model => {
         if(fs.existsSync(model.file) && !modelMap.has(model.file)) {
@@ -224,7 +246,7 @@ function getDocumentWorkspaceFolder(): string | undefined {
 }
 
 
-interface commandModel {
+interface CommandModel {
     command: string;
     file: string;
     directory: string;
