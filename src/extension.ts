@@ -2,10 +2,13 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import { DebugAdapterTracker, DebugAdapterTrackerFactory} from 'vscode';
 const {exec,spawn} = require("child_process");
 
 
 export function activate(context: vscode.ExtensionContext) {
+    vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
+
     let diagnosticCollection : vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection("oc-error");
     let outputChannel = vscode.window.createOutputChannel("ios-build");
 
@@ -17,6 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
+    
 	let buildDisposable = vscode.commands.registerCommand('ios-build.Build', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
@@ -67,12 +71,15 @@ export function activate(context: vscode.ExtensionContext) {
             runApp(false,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
         }
     });
+    let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
+    });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(stopDisposable);
     context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(buildAndRunDisposable);
     context.subscriptions.push(installAndRunDisposable);
     context.subscriptions.push(runWithoutInstallDisposable);
+    context.subscriptions.push(exceptionDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -250,4 +257,28 @@ interface CommandModel {
     command: string;
     file: string;
     directory: string;
+}
+
+class CustomDebugAdapterTracker implements DebugAdapterTracker {
+    static stopByBreakPoint: Boolean = false;
+    onDidSendMessage(message: any): void {
+        if(message.type === 'event' && message.event === 'stopped' && message.body.reason === 'breakpoint' && message.body.allThreadsStopped === true) {
+            CustomDebugAdapterTracker.stopByBreakPoint = true;
+            vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
+        }
+        if(CustomDebugAdapterTracker.stopByBreakPoint && message.type === 'response' && message.command === 'stackTrace') {
+            let frameId : Number = message.body.stackFrames[0].id;
+            let name : string = message.body.stackFrames[0].name;
+            if(name === 'objc_exception_throw') {
+                vscode.debug.activeDebugSession?.customRequest("evaluate", { context: 'repl', expression: 'po $arg1', frameId: frameId });
+            }            
+            CustomDebugAdapterTracker.stopByBreakPoint = false;
+        }
+    }
+}
+
+class CustomDebugAdapterTrackerFactory implements DebugAdapterTrackerFactory {
+    createDebugAdapterTracker(session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterTracker> {
+        return new CustomDebugAdapterTracker();
+    }
 }

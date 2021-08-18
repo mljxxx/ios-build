@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "publisher": "norminal",
   "engines": {
     "vscode": "^1.59.0"
