@@ -129,7 +129,7 @@ function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefine
     
     vscode.window.withProgress({location: ProgressLocation.Notification,title: "Installing App",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
         token.onCancellationRequested(() => {
-            
+            stopRun();
         });
         const p = new Promise<void>(resolve => {
             let progressNum: Number = 0;
