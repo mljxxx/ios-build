@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { DebugAdapterTracker, DebugAdapterTrackerFactory} from 'vscode';
+import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Progress, ProgressLocation} from 'vscode';
 const {exec,spawn} = require("child_process");
 
 
@@ -123,26 +123,42 @@ function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefine
     let installArg = install ? '' : '-m';
     let shellCommand :string = `ios-deploy-custom -N ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
     outputChannel.show();
+    outputChannel.clear();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
-    proc.stdout.on('data', async (data: Buffer) => {
-        const text: string = data.toString("utf-8");
-        if (text.search("Launch JSON Write Completed") !== -1) {
-            await sleep(500);
-            vscode.commands.executeCommand("workbench.action.debug.start");
-        }
-        console.log(text);
-        outputChannel.append(text);
-    });
-
-    proc.stderr.on('data', (data: Buffer) => {
-        console.log(data.toString("utf-8"));
-        outputChannel.append(data.toString("utf-8"));
-    });
-
-    proc.on('close', (data: Buffer) => {
-        console.log(data.toString("utf-8"));
-        outputChannel.append(data.toString("utf-8"));
+    
+    vscode.window.withProgress({location: ProgressLocation.Notification,title: "Installing App",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
+        token.onCancellationRequested(() => {
+            
+        });
+        const p = new Promise<void>(resolve => {
+            let progressNum: Number = 0;
+            proc.stdout.on('data', async (data: Buffer) => {
+                const text: string = data.toString("utf-8");
+                if (text.search("Launch JSON Write Completed") !== -1) {
+                    resolve();
+                    await sleep(500);
+                    vscode.commands.executeCommand("workbench.action.debug.start");
+                }
+                let pattern = RegExp(/\[\s*(\d+)%\]/, "g");
+                let progressStr: RegExpExecArray | null = null;
+                while (progressStr = pattern.exec(text)) {
+                    let currentprogressNum = Number(progressStr[1]);
+                    progress.report({ increment: currentprogressNum - progressNum.valueOf()});
+                    progressNum = currentprogressNum;
+                }
+            });
+            proc.stderr.on('data', (data: Buffer) => {
+                outputChannel.append(data.toString("utf-8"));
+                resolve();
+            });
+            proc.on('close', (data: Buffer) => {
+                // console.log(data.toString("utf-8"));
+                outputChannel.append(data.toString("utf-8"));
+                resolve();
+            });
+        });
+        return p;
     });
 }
 
@@ -261,6 +277,9 @@ interface CommandModel {
 
 class CustomDebugAdapterTracker implements DebugAdapterTracker {
     static stopByBreakPoint: Boolean = false;
+    onWillReceiveMessage(message: any): void {
+        console.log(message);
+    }
     onDidSendMessage(message: any): void {
         if(message.type === 'event' && message.event === 'stopped' && message.body.reason === 'breakpoint' && message.body.allThreadsStopped === true) {
             CustomDebugAdapterTracker.stopByBreakPoint = true;
