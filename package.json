@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "norminal",
   "engines": {
     "vscode": "^1.59.0"
@@ -16,7 +16,8 @@
     "onCommand:ios-build.buildAndRun",
     "onCommand:ios-build.Stop",
     "onCommand:ios-build.installAndRun",
-    "onCommand:ios-build.runWithoutInstall"
+    "onCommand:ios-build.runWithoutInstall",
+    "onCommand:ios-build.exception"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -43,7 +44,12 @@
       {
         "command": "ios-build.runWithoutInstall",
         "title": "iOS Run"
+      },
+      {
+        "command": "ios-build.exception",
+        "title": "iOS Add Exception Breakpoint"
       }
+
     ],
     "configuration": [
       {

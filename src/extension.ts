@@ -72,6 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
+        vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
     });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(stopDisposable);
