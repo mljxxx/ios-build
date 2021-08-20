@@ -2,9 +2,9 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Progress, ProgressLocation} from 'vscode';
+import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
-
+let firstErrorMessagePosition : ErrorMessagePosition | undefined = undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
@@ -169,6 +169,7 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         vscode.window.showErrorMessage("Build Configuration Error");
         return;
     }
+    firstErrorMessagePosition = undefined;
     if(clang !== undefined) {
         process.env.CC = clang;
     }
@@ -187,13 +188,12 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         outputChannel.append(output);
         postErrorMessage(diagnosticCollection,output);
     });
+    let isBuildFailed = false;
     proc.stderr.on('data',(data: Buffer) => {
         const output: string = data.toString("utf-8");
         outputChannel.append(output);
-        if (output.search("BUILD INTERRUPTED") !== -1) {
-            vscode.window.showInformationMessage("BUILD INTERRUPTED");
-        } else if (output.search("BUILD FAILED") !== -1) {
-            vscode.window.showInformationMessage("BUILD FAILED");
+        if (output.search("BUILD FAILED") !== -1) {
+            isBuildFailed = true;
         }
     });
 
@@ -206,17 +206,22 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
             if(run) {
                 runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
             }
-        }  else if (output.search("BUILD INTERRUPTED") !== -1) {
-            vscode.window.showInformationMessage("BUILD INTERRUPTED");
-        } else if (output.search("BUILD FAILED") !== -1) {
-            vscode.window.showInformationMessage("BUILD FAILED");
-        }
+        } else {
+            if(isBuildFailed) {
+                vscode.window.showInformationMessage("BUILD FAILED");
+                if (firstErrorMessagePosition !== undefined) {
+                    vscode.window.showTextDocument(firstErrorMessagePosition.uri, { selection: firstErrorMessagePosition.range });
+                }
+            } else {
+                vscode.window.showInformationMessage("BUILD INTERRUPTED");
+            }
+        } 
         await sleep(1000);
         produceCompileCommand(workPath,outputChannel);
     });
 }
 
-function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,text:string){
+function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,text:string) {
     let errorMessagePattern = new RegExp(/\[x\]\s(.*?):(\d+):(\d+):\s(.*?)\n/,"g");
     let errorMessage : RegExpExecArray | null = null;
     while(errorMessage = errorMessagePattern.exec(text)) {
@@ -230,7 +235,11 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
         let path: vscode.Uri = vscode.Uri.file(filePath);
         let diagnostic: vscode.Diagnostic = new vscode.Diagnostic(range, errorInfo);
         diagnosticCollection.set(path,[diagnostic]);
+        if(firstErrorMessagePosition === undefined) {
+            firstErrorMessagePosition = {uri: path,range:range};
+        }
     }
+    return undefined;
 }
 
 function produceCompileCommand(workPath:string,outputChannel : vscode.OutputChannel){
@@ -268,7 +277,10 @@ function getDocumentWorkspaceFolder(): string | undefined {
     }
 }
 
-
+interface ErrorMessagePosition {
+    uri:Uri;
+    range:vscode.Range;
+}
 interface CommandModel {
     command: string;
     file: string;
