@@ -184,7 +184,7 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
     outputChannel.show();
-    outputChannel.appendLine("BUILD START");
+    outputChannel.appendLine("** BUILD START **");
     proc.stdout.on('data', (data: Buffer) => {
         const output: string = data.toString("utf-8");
         postBuildMessage(output,outputChannel);
@@ -201,23 +201,23 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     proc.on('exit', async (data: Buffer) => {
         let output : string = await execShell("tail -n 2 xcodebuild.txt",workPath);
         if (output.search("CLEAN SUCCEEDED") !== -1) {
-            outputChannel.appendLine("CLEAN SUCCEEDED");
+            outputChannel.appendLine("** CLEAN SUCCEEDED **");
             vscode.window.showInformationMessage("CLEAN SUCCEEDED");
         } else if (output.search("BUILD SUCCEEDED") !== -1) {
-            outputChannel.appendLine("BUILD SUCCEEDED");
+            outputChannel.appendLine("** BUILD SUCCEEDED **");
             vscode.window.showInformationMessage("BUILD SUCCEEDED");
             if(run) {
                 runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
             }
         } else {
             if(isBuildFailed) {
-                outputChannel.appendLine("BUILD FAILED");
+                outputChannel.appendLine("** BUILD FAILED **");
                 vscode.window.showInformationMessage("BUILD FAILED");
                 if (firstErrorMessagePosition !== undefined) {
                     vscode.window.showTextDocument(firstErrorMessagePosition.uri, { selection: firstErrorMessagePosition.range });
                 }
             } else {
-                outputChannel.appendLine("BUILD INTERRUPTED");
+                outputChannel.appendLine("** BUILD INTERRUPTED **");
                 vscode.window.showInformationMessage("BUILD INTERRUPTED");
             }
         } 
