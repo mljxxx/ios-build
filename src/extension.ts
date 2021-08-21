@@ -184,15 +184,15 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
     outputChannel.show();
+    outputChannel.appendLine("BUILD START");
     proc.stdout.on('data', (data: Buffer) => {
         const output: string = data.toString("utf-8");
-        outputChannel.append(output);
-        postErrorMessage(diagnosticCollection,output);
+        postBuildMessage(output,outputChannel);
+        postErrorMessage(diagnosticCollection, output);
     });
     let isBuildFailed = false;
     proc.stderr.on('data',(data: Buffer) => {
         const output: string = data.toString("utf-8");
-        outputChannel.append(output);
         if (output.search("BUILD FAILED") !== -1) {
             isBuildFailed = true;
         }
@@ -201,25 +201,42 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     proc.on('exit', async (data: Buffer) => {
         let output : string = await execShell("tail -n 2 xcodebuild.txt",workPath);
         if (output.search("CLEAN SUCCEEDED") !== -1) {
+            outputChannel.appendLine("CLEAN SUCCEEDED");
             vscode.window.showInformationMessage("CLEAN SUCCEEDED");
         } else if (output.search("BUILD SUCCEEDED") !== -1) {
+            outputChannel.appendLine("BUILD SUCCEEDED");
             vscode.window.showInformationMessage("BUILD SUCCEEDED");
             if(run) {
                 runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
             }
         } else {
             if(isBuildFailed) {
+                outputChannel.appendLine("BUILD FAILED");
                 vscode.window.showInformationMessage("BUILD FAILED");
                 if (firstErrorMessagePosition !== undefined) {
                     vscode.window.showTextDocument(firstErrorMessagePosition.uri, { selection: firstErrorMessagePosition.range });
                 }
             } else {
+                outputChannel.appendLine("BUILD INTERRUPTED");
                 vscode.window.showInformationMessage("BUILD INTERRUPTED");
             }
         } 
         await sleep(1000);
-        produceCompileCommand(workPath,outputChannel);
+        produceCompileCommand(workPath);
     });
+}
+
+function postBuildMessage(text:string,outputChannel : vscode.OutputChannel) {
+    let buildMessagePattern = new RegExp(/>\s(.*?)\n/,"g");
+    let buildMessage : RegExpExecArray | null = null;
+    while(buildMessage = buildMessagePattern.exec(text)) {
+        outputChannel.append(buildMessage[0]);
+    }
+    let errorMessagePattern = new RegExp(/\[x\]\s(.*?)\n/,"g");
+    let errorMessage : RegExpExecArray | null = null;
+    while(errorMessage = errorMessagePattern.exec(text)) {
+        outputChannel.append(errorMessage[0]);
+    }
 }
 
 function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,text:string) {
@@ -243,7 +260,7 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
     return undefined;
 }
 
-function produceCompileCommand(workPath:string,outputChannel : vscode.OutputChannel){
+function produceCompileCommand(workPath:string){
     let compileCommandArray : CommandModel[] = [];
     let compileCommandUpdatePath : string = workPath.concat("/compile_commands_update.json");
     if(fs.existsSync(compileCommandUpdatePath)) {
