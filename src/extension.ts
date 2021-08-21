@@ -24,7 +24,6 @@ export function activate(context: vscode.ExtensionContext) {
 	let buildDisposable = vscode.commands.registerCommand('ios-build.Build', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
-        await stopBuild();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
@@ -33,22 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
 	let buildAndRunDisposable = vscode.commands.registerCommand('ios-build.buildAndRun', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
-        await stopBuild();
-        await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             buildApp(true,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
         }
     });
-    let stopDisposable = vscode.commands.registerCommand('ios-build.Stop', async () => {
-        await stopBuild();
-        await stopRun();
-    });
     
     let cleanDisposable = vscode.commands.registerCommand('ios-build.Clean', async () => {
         outputChannel.clear();
         diagnosticCollection.clear();
-        await stopBuild();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
@@ -56,7 +48,6 @@ export function activate(context: vscode.ExtensionContext) {
     });
     let installAndRunDisposable = vscode.commands.registerCommand('ios-build.installAndRun', async () => {
         outputChannel.clear();
-        await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             runApp(true,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
@@ -65,7 +56,6 @@ export function activate(context: vscode.ExtensionContext) {
     
     let runWithoutInstallDisposable = vscode.commands.registerCommand('ios-build.runWithoutInstall', async () => {
         outputChannel.clear();
-        await stopRun();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
             runApp(false,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
@@ -75,7 +65,6 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
     });
     context.subscriptions.push(buildDisposable);
-    context.subscriptions.push(stopDisposable);
     context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(buildAndRunDisposable);
     context.subscriptions.push(installAndRunDisposable);
@@ -84,7 +73,10 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() { }
+export async function deactivate() { 
+    await stopBuild();
+    await stopRun();
+}
       
 function execShell(cmd:string,workPath?:string) : Promise<string> {
     return new Promise<string>((resolve) => {
@@ -108,11 +100,12 @@ async function stopBuild() {
     // console.log(output);
 }
 async function stopRun() {
+    vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
     let output : string = await execShell("killall ios-deploy-custom");
     // console.log(output);
 }
 
-function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
+async function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {
     if(scheme === undefined || sdk === undefined || configuration===undefined || derivedDataPath === undefined) {
         vscode.window.showErrorMessage("Build Configuration Error");
         return;
@@ -122,15 +115,15 @@ function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefine
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
     let installArg = install ? '' : '-m';
-    let shellCommand :string = `ios-deploy-custom -N ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
+    let shellCommand :string = `ios-deploy-custom -N -W ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
     outputChannel.show();
     outputChannel.clear();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
     
-    vscode.window.withProgress({location: ProgressLocation.Notification,title: "Installing App",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
-        token.onCancellationRequested(() => {
-            stopRun();
+    vscode.window.withProgress({location: ProgressLocation.Notification,title: "INSTALLING APP",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
+        token.onCancellationRequested(async () => {
+            await stopRun();
         });
         const p = new Promise<void>(resolve => {
             let progressNum: Number = 0;
@@ -153,9 +146,7 @@ function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefine
                 outputChannel.append(data.toString("utf-8"));
                 resolve();
             });
-            proc.on('close', (data: Buffer) => {
-                // console.log(data.toString("utf-8"));
-                outputChannel.append(data.toString("utf-8"));
+            proc.on('close', () => {
                 resolve();
             });
         });
@@ -198,31 +189,40 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         }
     });
 
-    proc.on('exit', async (data: Buffer) => {
-        let output : string = await execShell("tail -n 2 xcodebuild.txt",workPath);
-        if (output.search("CLEAN SUCCEEDED") !== -1) {
-            outputChannel.appendLine("** CLEAN SUCCEEDED **");
-            vscode.window.showInformationMessage("CLEAN SUCCEEDED");
-        } else if (output.search("BUILD SUCCEEDED") !== -1) {
-            outputChannel.appendLine("** BUILD SUCCEEDED **");
-            vscode.window.showInformationMessage("BUILD SUCCEEDED");
-            if(run) {
-                runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
-            }
-        } else {
-            if(isBuildFailed) {
-                outputChannel.appendLine("** BUILD FAILED **");
-                vscode.window.showInformationMessage("BUILD FAILED");
-                if (firstErrorMessagePosition !== undefined) {
-                    vscode.window.showTextDocument(firstErrorMessagePosition.uri, { selection: firstErrorMessagePosition.range });
+    vscode.window.withProgress({location: ProgressLocation.Notification,title: "BUILDING APP",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
+        token.onCancellationRequested(async () => {
+            await stopBuild();
+        });
+        const p = new Promise<void>(resolve => {
+            proc.on('exit', async () => {
+                let output: string = await execShell("tail -n 2 xcodebuild.txt", workPath);
+                if (output.search("CLEAN SUCCEEDED") !== -1) {
+                    outputChannel.appendLine("** CLEAN SUCCEEDED **");
+                    vscode.window.showInformationMessage("CLEAN SUCCEEDED");
+                } else if (output.search("BUILD SUCCEEDED") !== -1) {
+                    outputChannel.appendLine("** BUILD SUCCEEDED **");
+                    vscode.window.showInformationMessage("BUILD SUCCEEDED");
+                    if (run) {
+                        runApp(true, workspaceFolder, scheme, configuration, sdk, derivedDataPath, outputChannel);
+                    }
+                } else {
+                    if (isBuildFailed) {
+                        outputChannel.appendLine("** BUILD FAILED **");
+                        vscode.window.showInformationMessage("BUILD FAILED");
+                        if (firstErrorMessagePosition !== undefined) {
+                            vscode.window.showTextDocument(firstErrorMessagePosition.uri, { selection: firstErrorMessagePosition.range });
+                        }
+                    } else {
+                        outputChannel.appendLine("** BUILD INTERRUPTED **");
+                        vscode.window.showInformationMessage("BUILD INTERRUPTED");
+                    }
                 }
-            } else {
-                outputChannel.appendLine("** BUILD INTERRUPTED **");
-                vscode.window.showInformationMessage("BUILD INTERRUPTED");
-            }
-        } 
-        await sleep(1000);
-        produceCompileCommand(workPath);
+                resolve();
+                await sleep(1000);
+                produceCompileCommand(workPath);
+            });
+        });
+        return p;
     });
 }
 
@@ -307,7 +307,10 @@ interface CommandModel {
 
 class CustomDebugAdapterTracker implements DebugAdapterTracker {
     static stopByBreakPoint: Boolean = false;
-    onWillReceiveMessage(message: any): void {
+    async onWillReceiveMessage(message: any): Promise<void> {
+        if(message.type === 'request' && message.command === 'disconnect') {
+            await stopRun();
+        }
         console.log(message);
     }
     onDidSendMessage(message: any): void {

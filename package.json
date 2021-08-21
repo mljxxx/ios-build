@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "norminal",
   "engines": {
     "vscode": "^1.59.0"
@@ -14,7 +14,6 @@
     "onCommand:ios-build.Build",
     "onCommand:ios-build.Clean",
     "onCommand:ios-build.buildAndRun",
-    "onCommand:ios-build.Stop",
     "onCommand:ios-build.installAndRun",
     "onCommand:ios-build.runWithoutInstall",
     "onCommand:ios-build.exception"
@@ -32,10 +31,6 @@
       {
         "command": "ios-build.buildAndRun",
         "title": "iOS Build & Run"
-      },
-      {
-        "command": "ios-build.Stop",
-        "title": "iOS Stop"
       },
       {
         "command": "ios-build.installAndRun",
