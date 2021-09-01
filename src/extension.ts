@@ -131,7 +131,8 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
                 const text: string = data.toString("utf-8");
                 if (text.search("Launch JSON Write Completed") !== -1) {
                     resolve();
-                    await sleep(500);
+                    await sleep(1000);
+                    
                     vscode.commands.executeCommand("workbench.action.debug.start");
                 }
                 let pattern = RegExp(/\[\s*(\d+)%\]/, "g");
@@ -169,7 +170,7 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
-    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES`
+    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO`
     + ` | tee xcodebuild.txt | xcpretty --no-utf --report json-compilation-database --output compile_commands_update.json`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
@@ -186,6 +187,9 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         const output: string = data.toString("utf-8");
         if (output.search("BUILD FAILED") !== -1) {
             isBuildFailed = true;
+        }
+        if(output.search("xcodebuild: error:") !== -1) {
+            outputChannel.append(output);
         }
     });
 
