@@ -20,13 +20,14 @@ export function activate(context: vscode.ExtensionContext) {
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
+    let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem");
     
 	let buildDisposable = vscode.commands.registerCommand('ios-build.Build', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+            buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
 	let buildAndRunDisposable = vscode.commands.registerCommand('ios-build.buildAndRun', async () => {
@@ -34,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp(true,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+            buildApp(true,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
     
@@ -43,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
         diagnosticCollection.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,diagnosticCollection,outputChannel);
+            buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
     let installAndRunDisposable = vscode.commands.registerCommand('ios-build.installAndRun', async () => {
@@ -115,7 +116,7 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
     let installArg = install ? '' : '-m';
-    let shellCommand :string = `ios-deploy-custom -N -W ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
+    let shellCommand :string = `ios-deploy-custom -N -d -W ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
     outputChannel.show();
     outputChannel.clear();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
@@ -157,7 +158,7 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
 
 async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,clang : string|undefined,workspace : string|undefined,
     scheme : string|undefined,configuration : string|undefined,sdk : string|undefined,arch : string|undefined,
-    derivedDataPath : string|undefined,diagnosticCollection : vscode.DiagnosticCollection,outputChannel : vscode.OutputChannel) {
+    derivedDataPath : string|undefined,useModernBuildSystem : string | undefined,diagnosticCollection : vscode.DiagnosticCollection,outputChannel : vscode.OutputChannel) {
     if(workspace===undefined || scheme===undefined || configuration===undefined || sdk===undefined || arch===undefined ||derivedDataPath===undefined) {
         vscode.window.showErrorMessage("Build Configuration Error");
         return;
@@ -168,9 +169,10 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     }
     workspace = workspace.replace('${workspaceFolder}', workspaceFolder);
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
+    useModernBuildSystem = useModernBuildSystem === undefined ? "YES" : useModernBuildSystem;
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
-    + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath}`
-    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO`
+    + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath} -UseModernBuildSystem=${useModernBuildSystem}`
+    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO `
     + ` | tee xcodebuild.txt | xcpretty --no-utf --report json-compilation-database --output compile_commands_update.json`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });

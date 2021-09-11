@@ -91,6 +91,15 @@
                 "type": "string",
                 "default": "${workspaceFolder}/DerivedData",
                 "description": "derivedDataPath"
+              },
+              "useModernBuildSystem": {
+                "type": "string",
+                "enum": [
+                  "YES",
+                  "NO"
+                ],
+                "default": "YES",
+                "description": "useModernBuildSystem"
               }
             }
           }
