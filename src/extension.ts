@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
-const kill = require('tree-kill');
 let firstErrorMessagePosition : ErrorMessagePosition | undefined = undefined;
 let xcodebuildPid : number = -1;
 let iOSdeployPid : number = -1;
@@ -101,7 +100,7 @@ function sleep(ms: number | undefined) : Promise<string> {
 
 async function stopBuild() {
     if(xcodebuildPid !== -1) {
-        await kill(xcodebuildPid,"SIGKILL");
+        await process.kill(-xcodebuildPid,"SIGKILL");
         xcodebuildPid = -1;
     }
     // let output : string = await execShell("killall xcodebuild");
@@ -110,7 +109,7 @@ async function stopBuild() {
 async function stopRun() {
     vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
     if(iOSdeployPid !== -1) {
-        await kill(iOSdeployPid,"SIGKILL");
+        await process.kill(-iOSdeployPid,"SIGKILL");
         iOSdeployPid = -1;
     }
     // let output : string = await execShell("killall ios-deploy-custom");

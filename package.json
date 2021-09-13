@@ -5,7 +5,7 @@
   "version": "0.1.4",
   "publisher": "norminal",
   "repository": {
-    "type" : "git",
+    "type": "git",
     "url": "https://github.com/mljxxx/ios-build.git"
   },
   "engines": {
@@ -129,7 +129,6 @@
     "eslint": "^7.27.0",
     "glob": "^7.1.7",
     "mocha": "^8.4.0",
-    "tree-kill": "1.2.2",
     "typescript": "^4.3.2",
     "vscode-test": "^1.5.2"
   }
