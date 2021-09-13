@@ -4,7 +4,10 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
+const kill = require('tree-kill');
 let firstErrorMessagePosition : ErrorMessagePosition | undefined = undefined;
+let xcodebuildPid : number = -1;
+let iOSdeployPid : number = -1;
 
 export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
@@ -97,12 +100,20 @@ function sleep(ms: number | undefined) : Promise<string> {
 };
 
 async function stopBuild() {
-    let output : string = await execShell("killall xcodebuild");
+    if(xcodebuildPid !== -1) {
+        await kill(xcodebuildPid,"SIGKILL");
+        xcodebuildPid = -1;
+    }
+    // let output : string = await execShell("killall xcodebuild");
     // console.log(output);
 }
 async function stopRun() {
     vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
-    let output : string = await execShell("killall ios-deploy-custom");
+    if(iOSdeployPid !== -1) {
+        await kill(iOSdeployPid,"SIGKILL");
+        iOSdeployPid = -1;
+    }
+    // let output : string = await execShell("killall ios-deploy-custom");
     // console.log(output);
 }
 
@@ -116,12 +127,12 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
     let installArg = install ? '' : '-m';
-    let shellCommand :string = `ios-deploy-custom -N -d -W ${installArg} -b ${executePath} -p 33333 -P ${workPath}`;
+    let shellCommand :string = `ios-deploy-custom -N -d -W ${installArg} -b ${executePath} -P ${workPath}`;
     outputChannel.show();
     outputChannel.clear();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
-    
+    iOSdeployPid = proc.pid;
     vscode.window.withProgress({location: ProgressLocation.Notification,title: "INSTALLING APP",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
         token.onCancellationRequested(async () => {
             await stopRun();
@@ -177,6 +188,7 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
     proc.unref();
+    xcodebuildPid = proc.pid;
     outputChannel.show();
     outputChannel.appendLine("** BUILD START **");
     proc.stdout.on('data', (data: Buffer) => {

@@ -2,8 +2,12 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "norminal",
+  "repository": {
+    "type" : "git",
+    "url": "https://github.com/mljxxx/ios-build.git"
+  },
   "engines": {
     "vscode": "^1.59.0"
   },
@@ -24,7 +28,8 @@
       {
         "command": "ios-build.Build",
         "title": "iOS Build"
-      },{
+      },
+      {
         "command": "ios-build.Clean",
         "title": "iOS Build Clean"
       },
@@ -44,7 +49,6 @@
         "command": "ios-build.exception",
         "title": "iOS Add Exception Breakpoint"
       }
-
     ],
     "configuration": [
       {
@@ -125,6 +129,7 @@
     "eslint": "^7.27.0",
     "glob": "^7.1.7",
     "mocha": "^8.4.0",
+    "tree-kill": "1.2.2",
     "typescript": "^4.3.2",
     "vscode-test": "^1.5.2"
   }
