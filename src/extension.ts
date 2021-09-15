@@ -153,6 +153,10 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
                     progress.report({ increment: currentprogressNum - progressNum.valueOf()});
                     progressNum = currentprogressNum;
                 }
+                let disconnectPattern = RegExp(/Disconnected\s.*?\sfrom USB/,"g");
+                if(disconnectPattern.test(text)){
+                    stopRun();    
+                }
             });
             proc.stderr.on('data', (data: Buffer) => {
                 outputChannel.append(data.toString("utf-8"));
