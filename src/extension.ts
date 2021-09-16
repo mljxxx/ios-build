@@ -126,7 +126,7 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
     let installArg = install ? '' : '-m';
-    let shellCommand :string = `ios-deploy-custom -N -d -W ${installArg} -b ${executePath} -P ${workPath}`;
+    let shellCommand :string = `ios-deploy-custom -N -W ${installArg} -b ${executePath} -P ${workPath}`;
     outputChannel.show();
     outputChannel.clear();
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
