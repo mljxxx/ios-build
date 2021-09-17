@@ -1,16 +1,19 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import * as vscode from 'vscode';
-import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, Progress, ProgressLocation, Uri} from 'vscode';
+import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, HoverProvider, InlineValuesProvider, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
 let firstErrorMessagePosition : ErrorMessagePosition | undefined = undefined;
 let xcodebuildPid : number = -1;
 let iOSdeployPid : number = -1;
+let currentFrameId : number = -1;
+let manualEvaluate : Boolean = false;
 
 export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
-
+    vscode.languages.registerInlineValuesProvider("*", new CustomInlineValuesProvider());
     let diagnosticCollection : vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection("oc-error");
     let outputChannel = vscode.window.createOutputChannel("ios-build");
 
@@ -64,8 +67,13 @@ export function activate(context: vscode.ExtensionContext) {
             runApp(false,workspaceFolder,scheme,configuration,sdk,derivedDataPath,outputChannel);
         }
     });
+
     let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
         vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
+    });
+    
+    let evaluateDisposable = vscode.commands.registerCommand('ios-build.evaluate', async () => {
+        evaluateSelectedText();
     });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(cleanDisposable);
@@ -73,6 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(installAndRunDisposable);
     context.subscriptions.push(runWithoutInstallDisposable);
     context.subscriptions.push(exceptionDisposable);
+    context.subscriptions.push(evaluateDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -306,6 +315,17 @@ function produceCompileCommand(workPath:string){
     fs.writeFile(compileCommandPath,compileCommandJSON,"utf-8",(err: NodeJS.ErrnoException | null) => {});
 }
 
+async function evaluateSelectedText() {
+    let editor : vscode.TextEditor | undefined = vscode.window.activeTextEditor;
+    let selection : vscode.Selection | undefined = editor?.selection;
+    let selectedText = editor?.document.getText(selection);
+    if(selectedText !== undefined && currentFrameId !== -1 && vscode.debug.activeDebugSession !== undefined) {
+        manualEvaluate = true;
+        vscode.debug.activeDebugConsole.appendLine(`po ${selectedText}`);
+        vscode.debug.activeDebugSession.customRequest("evaluate", { context: 'repl', expression: `po ${selectedText}`, frameId: currentFrameId });
+    }
+}
+
 function getDocumentWorkspaceFolder(): string | undefined {
     let folders : readonly vscode.WorkspaceFolder[] | undefined =  vscode.workspace.workspaceFolders;
     if(folders !== undefined) {
@@ -347,11 +367,32 @@ class CustomDebugAdapterTracker implements DebugAdapterTracker {
             }            
             CustomDebugAdapterTracker.stopByBreakPoint = false;
         }
+        if(manualEvaluate) {
+            manualEvaluate = false;
+            if(message.type === 'response' && message.success === false) {
+                vscode.debug.activeDebugConsole.append(message.message + '\n');
+            }
+            // console.log(message);
+        }
     }
 }
 
 class CustomDebugAdapterTrackerFactory implements DebugAdapterTrackerFactory {
     createDebugAdapterTracker(session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterTracker> {
         return new CustomDebugAdapterTracker();
+    }
+}
+
+class CustomIHoverProvider implements HoverProvider {
+    provideHover(document: vscode.TextDocument, position: vscode.Position, token: CancellationToken): vscode.ProviderResult<vscode.Hover> {
+        
+        return undefined;
+    }
+}
+
+class CustomInlineValuesProvider implements InlineValuesProvider {
+    provideInlineValues(document: vscode.TextDocument, viewPort: vscode.Range, context: vscode.InlineValueContext, token: CancellationToken): vscode.ProviderResult<vscode.InlineValue[]> {
+        currentFrameId = context.frameId;
+        return undefined;
     }
 }

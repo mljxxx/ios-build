@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "norminal",
   "repository": {
     "type": "git",
@@ -48,8 +48,20 @@
       {
         "command": "ios-build.exception",
         "title": "iOS Add Exception Breakpoint"
+      },
+      {
+        "command": "ios-build.evaluate",
+        "title": "iOS Evaluate"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ios-build.evaluate",
+          "when": "editorTextFocus"
+        }
+      ]
+    },
     "configuration": [
       {
         "title": "ios.build Configration",
