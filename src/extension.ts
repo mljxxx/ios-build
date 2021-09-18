@@ -347,7 +347,6 @@ interface CommandModel {
 }
 
 class CustomDebugAdapterTracker implements DebugAdapterTracker {
-    static stopByBreakPoint: Boolean = false;
     async onWillReceiveMessage(message: any): Promise<void> {
         if(message.type === 'request' && message.command === 'disconnect') {
             await stopRun();
@@ -356,16 +355,7 @@ class CustomDebugAdapterTracker implements DebugAdapterTracker {
     }
     onDidSendMessage(message: any): void {
         if(message.type === 'event' && message.event === 'stopped' && message.body.reason === 'breakpoint' && message.body.allThreadsStopped === true) {
-            CustomDebugAdapterTracker.stopByBreakPoint = true;
             vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
-        }
-        if(CustomDebugAdapterTracker.stopByBreakPoint && message.type === 'response' && message.command === 'stackTrace') {
-            let frameId : Number = message.body.stackFrames[0].id;
-            let name : string = message.body.stackFrames[0].name;
-            if(name === 'objc_exception_throw') {
-                vscode.debug.activeDebugSession?.customRequest("evaluate", { context: 'repl', expression: 'po $arg1', frameId: frameId });
-            }            
-            CustomDebugAdapterTracker.stopByBreakPoint = false;
         }
         if(manualEvaluate) {
             manualEvaluate = false;
@@ -380,13 +370,6 @@ class CustomDebugAdapterTracker implements DebugAdapterTracker {
 class CustomDebugAdapterTrackerFactory implements DebugAdapterTrackerFactory {
     createDebugAdapterTracker(session: vscode.DebugSession): vscode.ProviderResult<vscode.DebugAdapterTracker> {
         return new CustomDebugAdapterTracker();
-    }
-}
-
-class CustomIHoverProvider implements HoverProvider {
-    provideHover(document: vscode.TextDocument, position: vscode.Position, token: CancellationToken): vscode.ProviderResult<vscode.Hover> {
-        
-        return undefined;
     }
 }
 
