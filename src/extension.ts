@@ -1,7 +1,6 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
-import { createRequire } from 'module';
 import * as vscode from 'vscode';
 import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, HoverProvider, InlineValuesProvider, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
@@ -98,32 +97,28 @@ async function showQuickPick (){
     let items: CustomQuickPickItem[] =
         [
             {
-                "command": "ios-build.Build",
-                "label": "iOS Build"
-            },
-            {
-                "command": "ios-build.Clean",
-                "label": "iOS Build Clean"
-            },
-            {
                 "command": "ios-build.buildAndRun",
                 "label": "iOS Build & Run"
-            },
-            {
-                "command": "ios-build.installAndRun",
-                "label": "iOS Install & Run"
             },
             {
                 "command": "ios-build.runWithoutInstall",
                 "label": "iOS Run"
             },
             {
-                "command": "ios-build.exception",
-                "label": "iOS Add Exception Breakpoint"
+                "command": "ios-build.installAndRun",
+                "label": "iOS Install & Run"
+            },
+            {
+                "command": "ios-build.Build",
+                "label": "iOS Build"
             },
             {
                 "command": "ios-build.evaluate",
                 "label": "iOS Evaluate"
+            },
+            {
+                "command": "ios-build.exception",
+                "label": "iOS Add Exception Breakpoint"
             },
         ];
     let quickPick: vscode.QuickPick<CustomQuickPickItem> = vscode.window.createQuickPick();
