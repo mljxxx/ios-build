@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "norminal",
   "repository": {
     "type": "git",
@@ -20,7 +20,9 @@
     "onCommand:ios-build.buildAndRun",
     "onCommand:ios-build.installAndRun",
     "onCommand:ios-build.runWithoutInstall",
-    "onCommand:ios-build.exception"
+    "onCommand:ios-build.exception",
+    "onCommand:ios-build.quickPick",
+    "onCommand:ios-build.evaluate"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -52,6 +54,10 @@
       {
         "command": "ios-build.evaluate",
         "title": "iOS Evaluate"
+      },
+      {
+        "command": "ios-build.quickPick",
+        "title": "iOS QuickPick"
       }
     ],
     "menus": {

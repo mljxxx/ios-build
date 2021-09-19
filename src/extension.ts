@@ -75,6 +75,9 @@ export function activate(context: vscode.ExtensionContext) {
     let evaluateDisposable = vscode.commands.registerCommand('ios-build.evaluate', async () => {
         evaluateSelectedText();
     });
+    let quickPickDisposable = vscode.commands.registerCommand('ios-build.quickPick', async () => {
+        showQuickPick();
+    });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(buildAndRunDisposable);
@@ -82,12 +85,58 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(runWithoutInstallDisposable);
     context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(evaluateDisposable);
+    context.subscriptions.push(quickPickDisposable);
 }
 
 // this method is called when your extension is deactivated
 export async function deactivate() { 
     await stopBuild();
     await stopRun();
+}
+
+async function showQuickPick (){
+    let items: CustomQuickPickItem[] =
+        [
+            {
+                "command": "ios-build.Build",
+                "label": "iOS Build"
+            },
+            {
+                "command": "ios-build.Clean",
+                "label": "iOS Build Clean"
+            },
+            {
+                "command": "ios-build.buildAndRun",
+                "label": "iOS Build & Run"
+            },
+            {
+                "command": "ios-build.installAndRun",
+                "label": "iOS Install & Run"
+            },
+            {
+                "command": "ios-build.runWithoutInstall",
+                "label": "iOS Run"
+            },
+            {
+                "command": "ios-build.exception",
+                "label": "iOS Add Exception Breakpoint"
+            },
+            {
+                "command": "ios-build.evaluate",
+                "label": "iOS Evaluate"
+            },
+        ];
+    let quickPick: vscode.QuickPick<CustomQuickPickItem> = vscode.window.createQuickPick();
+    quickPick.title = "iOS";
+    quickPick.items = items;
+    quickPick.onDidAccept(() => {
+        let item = quickPick.selectedItems[0];
+        vscode.commands.executeCommand(item.command);
+    });
+    quickPick.onDidHide(() => {
+        quickPick.dispose();
+    });
+    quickPick.show();
 }
       
 function execShell(cmd:string,workPath?:string) : Promise<string> {
@@ -377,5 +426,14 @@ class CustomInlineValuesProvider implements InlineValuesProvider {
     provideInlineValues(document: vscode.TextDocument, viewPort: vscode.Range, context: vscode.InlineValueContext, token: CancellationToken): vscode.ProviderResult<vscode.InlineValue[]> {
         currentFrameId = context.frameId;
         return undefined;
+    }
+}
+
+class CustomQuickPickItem implements vscode.QuickPickItem {
+    label: string;
+    command : string;
+    constructor(label:string,command:string) {
+        this.label = label;
+        this.command = command;
     }
 }
