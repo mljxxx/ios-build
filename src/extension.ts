@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
     let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem");
     
-	let buildDisposable = vscode.commands.registerCommand('ios-build.Build', async () => {
+	let buildDisposable = vscode.commands.registerCommand('ios-build.build', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
@@ -34,6 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
             buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
+
 	let buildAndRunDisposable = vscode.commands.registerCommand('ios-build.buildAndRun', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
@@ -43,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    let cleanDisposable = vscode.commands.registerCommand('ios-build.Clean', async () => {
+    let cleanDisposable = vscode.commands.registerCommand('ios-build.clean', async () => {
         outputChannel.clear();
         diagnosticCollection.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
@@ -74,8 +75,14 @@ export function activate(context: vscode.ExtensionContext) {
     let evaluateDisposable = vscode.commands.registerCommand('ios-build.evaluate', async () => {
         evaluateSelectedText();
     });
+
     let quickPickDisposable = vscode.commands.registerCommand('ios-build.quickPick', async () => {
         showQuickPick();
+    });
+
+    let hiddenDisposable = vscode.commands.registerCommand('ios-build.hidden', async () => {
+        vscode.commands.executeCommand("workbench.action.closeSidebar");
+        vscode.commands.executeCommand("workbench.action.closePanel");
     });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(cleanDisposable);
@@ -85,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(evaluateDisposable);
     context.subscriptions.push(quickPickDisposable);
+    context.subscriptions.push(hiddenDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -109,7 +117,7 @@ async function showQuickPick (){
                 "label": "iOS Install & Run"
             },
             {
-                "command": "ios-build.Build",
+                "command": "ios-build.build",
                 "label": "iOS Build"
             },
             {
@@ -119,6 +127,10 @@ async function showQuickPick (){
             {
                 "command": "ios-build.exception",
                 "label": "iOS Add Exception Breakpoint"
+            },
+            {
+                "command": "ios-build.hidden",
+                "label": "iOS Hidden"
             },
         ];
     let quickPick: vscode.QuickPick<CustomQuickPickItem> = vscode.window.createQuickPick();
@@ -156,8 +168,6 @@ async function stopBuild() {
         await process.kill(-xcodebuildPid,"SIGKILL");
         xcodebuildPid = -1;
     }
-    // let output : string = await execShell("killall xcodebuild");
-    // console.log(output);
 }
 async function stopRun() {
     vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
@@ -165,8 +175,6 @@ async function stopRun() {
         await process.kill(-iOSdeployPid,"SIGKILL");
         iOSdeployPid = -1;
     }
-    // let output : string = await execShell("killall ios-deploy-custom");
-    // console.log(output);
 }
 
 async function runApp(install:Boolean,workspaceFolder: string,scheme:string | undefined,configuration : string|undefined,sdk : string|undefined,derivedDataPath : string | undefined,outputChannel : vscode.OutputChannel) {

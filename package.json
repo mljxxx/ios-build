@@ -15,8 +15,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:ios-build.Build",
-    "onCommand:ios-build.Clean",
+    "onCommand:ios-build.build",
+    "onCommand:ios-build.clean",
     "onCommand:ios-build.buildAndRun",
     "onCommand:ios-build.installAndRun",
     "onCommand:ios-build.runWithoutInstall",
@@ -28,11 +28,11 @@
   "contributes": {
     "commands": [
       {
-        "command": "ios-build.Build",
+        "command": "ios-build.build",
         "title": "iOS Build"
       },
       {
-        "command": "ios-build.Clean",
+        "command": "ios-build.clean",
         "title": "iOS Build Clean"
       },
       {
