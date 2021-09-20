@@ -80,10 +80,6 @@ export function activate(context: vscode.ExtensionContext) {
         showQuickPick();
     });
 
-    let hiddenDisposable = vscode.commands.registerCommand('ios-build.hidden', async () => {
-        vscode.commands.executeCommand("workbench.action.closeSidebar");
-        vscode.commands.executeCommand("workbench.action.closePanel");
-    });
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(buildAndRunDisposable);
@@ -92,7 +88,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(evaluateDisposable);
     context.subscriptions.push(quickPickDisposable);
-    context.subscriptions.push(hiddenDisposable);
 }
 
 // this method is called when your extension is deactivated
@@ -123,14 +118,6 @@ async function showQuickPick (){
             {
                 "command": "ios-build.evaluate",
                 "label": "iOS Evaluate"
-            },
-            {
-                "command": "ios-build.exception",
-                "label": "iOS Add Exception Breakpoint"
-            },
-            {
-                "command": "ios-build.hidden",
-                "label": "iOS Hidden"
             },
         ];
     let quickPick: vscode.QuickPick<CustomQuickPickItem> = vscode.window.createQuickPick();
