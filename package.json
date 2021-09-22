@@ -16,11 +16,9 @@
   ],
   "activationEvents": [
     "onCommand:ios-build.build",
-    "onCommand:ios-build.clean",
     "onCommand:ios-build.buildAndRun",
     "onCommand:ios-build.installAndRun",
     "onCommand:ios-build.runWithoutInstall",
-    "onCommand:ios-build.exception",
     "onCommand:ios-build.quickPick",
     "onCommand:ios-build.evaluate"
   ],
@@ -30,10 +28,6 @@
       {
         "command": "ios-build.build",
         "title": "iOS Build"
-      },
-      {
-        "command": "ios-build.clean",
-        "title": "iOS Build Clean"
       },
       {
         "command": "ios-build.buildAndRun",
@@ -46,10 +40,6 @@
       {
         "command": "ios-build.runWithoutInstall",
         "title": "iOS Run"
-      },
-      {
-        "command": "ios-build.exception",
-        "title": "iOS Add Exception Breakpoint"
       },
       {
         "command": "ios-build.evaluate",
@@ -79,6 +69,11 @@
                 "type": "string",
                 "default": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
                 "description": "clang Path"
+              },
+              "sysroot": {
+                "type": "string",
+                "default": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk",
+                "description": "sdk Path"
               },
               "workspace": {
                 "type": "string",

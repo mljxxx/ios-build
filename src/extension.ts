@@ -17,21 +17,22 @@ export function activate(context: vscode.ExtensionContext) {
     let outputChannel = vscode.window.createOutputChannel("ios-build");
 
     let workspaceConfig = vscode.workspace.getConfiguration("ios.build");
-    let clang : string|undefined = workspaceConfig.get("clang");
+    let clang : string|undefined = workspaceConfig.get("clang","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang");
+    let sysroot : string|undefined = workspaceConfig.get("sysroot","/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk");
     let workspace : string|undefined = workspaceConfig.get("workspace");
     let scheme : string |undefined = workspaceConfig.get("scheme");
-    let configuration : string |undefined = workspaceConfig.get("configuration");
+    let configuration : string |undefined = workspaceConfig.get("configuration","Debug");
     let sdk : string |undefined = workspaceConfig.get("sdk");
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
-    let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem");
+    let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem","YES");
     
 	let buildDisposable = vscode.commands.registerCommand('ios-build.build', async () => {
         diagnosticCollection.clear();
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp(false,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
+            buildApp(false,"build",workspaceFolder,clang,sysroot,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
 
@@ -40,18 +41,18 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
         if(workspaceFolder !== undefined) {
-            buildApp(true,"build",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
+            buildApp(true,"build",workspaceFolder,clang,sysroot,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
         }
     });
     
-    let cleanDisposable = vscode.commands.registerCommand('ios-build.clean', async () => {
-        outputChannel.clear();
-        diagnosticCollection.clear();
-        const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
-        if(workspaceFolder !== undefined) {
-            buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
-        }
-    });
+    // let cleanDisposable = vscode.commands.registerCommand('ios-build.clean', async () => {
+    //     outputChannel.clear();
+    //     diagnosticCollection.clear();
+    //     const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+    //     if(workspaceFolder !== undefined) {
+    //         buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
+    //     }
+    // });
     let installAndRunDisposable = vscode.commands.registerCommand('ios-build.installAndRun', async () => {
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
@@ -68,9 +69,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
-        vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
-    });
+    // let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
+    //     vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
+    // });
     
     let evaluateDisposable = vscode.commands.registerCommand('ios-build.evaluate', async () => {
         evaluateSelectedText();
@@ -80,12 +81,12 @@ export function activate(context: vscode.ExtensionContext) {
         showQuickPick();
     });
 
+    // context.subscriptions.push(cleanDisposable);
+    // context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(buildDisposable);
-    context.subscriptions.push(cleanDisposable);
     context.subscriptions.push(buildAndRunDisposable);
     context.subscriptions.push(installAndRunDisposable);
     context.subscriptions.push(runWithoutInstallDisposable);
-    context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(evaluateDisposable);
     context.subscriptions.push(quickPickDisposable);
 }
@@ -218,7 +219,7 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
     });
 }
 
-async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,clang : string|undefined,workspace : string|undefined,
+async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,clang : string|undefined,sysroot : string|undefined,workspace : string|undefined,
     scheme : string|undefined,configuration : string|undefined,sdk : string|undefined,arch : string|undefined,
     derivedDataPath : string|undefined,useModernBuildSystem : string | undefined,diagnosticCollection : vscode.DiagnosticCollection,outputChannel : vscode.OutputChannel) {
     if(workspace===undefined || scheme===undefined || configuration===undefined || sdk===undefined || arch===undefined ||derivedDataPath===undefined) {
@@ -226,12 +227,10 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         return;
     }
     firstErrorMessagePosition = undefined;
-    if(clang !== undefined) {
-        process.env.CC = clang;
-    }
+    process.env.CC = clang ;
+    process.env.SDKROOT = sysroot;
     workspace = workspace.replace('${workspaceFolder}', workspaceFolder);
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
-    useModernBuildSystem = useModernBuildSystem === undefined ? "YES" : useModernBuildSystem;
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath} -UseModernBuildSystem=${useModernBuildSystem}`
     + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO `
@@ -265,10 +264,11 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         const p = new Promise<void>(resolve => {
             proc.on('exit', async () => {
                 let output: string = await execShell("tail -n 2 xcodebuild.txt", workPath);
-                if (output.search("CLEAN SUCCEEDED") !== -1) {
-                    outputChannel.appendLine("** CLEAN SUCCEEDED **");
-                    vscode.window.showInformationMessage("CLEAN SUCCEEDED");
-                } else if (output.search("BUILD SUCCEEDED") !== -1) {
+                // if (output.search("CLEAN SUCCEEDED") !== -1) {
+                //     outputChannel.appendLine("** CLEAN SUCCEEDED **");
+                //     vscode.window.showInformationMessage("CLEAN SUCCEEDED");
+                // } else if (output.search("BUILD SUCCEEDED") !== -1) {
+                if (output.search("BUILD SUCCEEDED") !== -1) {
                     outputChannel.appendLine("** BUILD SUCCEEDED **");
                     vscode.window.showInformationMessage("BUILD SUCCEEDED");
                     if (run) {
@@ -319,7 +319,7 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
         let startPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
         let endPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
         let range: vscode.Range = new vscode.Range(startPosition, endPosition);
-        let path: vscode.Uri = vscode.Uri.file(filePath);
+        let path: vscode.Uri = vscode.Uri.file(fs.realpathSync(filePath));
         let diagnostic: vscode.Diagnostic = new vscode.Diagnostic(range, errorInfo);
         diagnosticCollection.set(path,[diagnostic]);
         if(firstErrorMessagePosition === undefined) {
