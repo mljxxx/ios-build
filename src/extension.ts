@@ -45,14 +45,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    // let cleanDisposable = vscode.commands.registerCommand('ios-build.clean', async () => {
-    //     outputChannel.clear();
-    //     diagnosticCollection.clear();
-    //     const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
-    //     if(workspaceFolder !== undefined) {
-    //         buildApp(false,"clean",workspaceFolder,clang,workspace,scheme,configuration,sdk,arch,derivedDataPath,useModernBuildSystem,diagnosticCollection,outputChannel);
-    //     }
-    // });
     let installAndRunDisposable = vscode.commands.registerCommand('ios-build.installAndRun', async () => {
         outputChannel.clear();
         const workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
@@ -69,9 +61,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // let exceptionDisposable = vscode.commands.registerCommand('ios-build.exception', async () => {
-    //     vscode.debug.addBreakpoints([new vscode.FunctionBreakpoint("objc_exception_throw")]);
-    // });
     
     let evaluateDisposable = vscode.commands.registerCommand('ios-build.evaluate', async () => {
         evaluateSelectedText();
@@ -81,8 +70,6 @@ export function activate(context: vscode.ExtensionContext) {
         showQuickPick();
     });
 
-    // context.subscriptions.push(cleanDisposable);
-    // context.subscriptions.push(exceptionDisposable);
     context.subscriptions.push(buildDisposable);
     context.subscriptions.push(buildAndRunDisposable);
     context.subscriptions.push(installAndRunDisposable);
@@ -264,10 +251,6 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
         const p = new Promise<void>(resolve => {
             proc.on('exit', async () => {
                 let output: string = await execShell("tail -n 2 xcodebuild.txt", workPath);
-                // if (output.search("CLEAN SUCCEEDED") !== -1) {
-                //     outputChannel.appendLine("** CLEAN SUCCEEDED **");
-                //     vscode.window.showInformationMessage("CLEAN SUCCEEDED");
-                // } else if (output.search("BUILD SUCCEEDED") !== -1) {
                 if (output.search("BUILD SUCCEEDED") !== -1) {
                     outputChannel.appendLine("** BUILD SUCCEEDED **");
                     vscode.window.showInformationMessage("BUILD SUCCEEDED");
