@@ -220,7 +220,7 @@ async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,c
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     let shellCommand :string = `xcodebuild ${buildAction}` + ` -workspace ${workspace}` + ` -scheme ${scheme}` 
     + ` -configuration ${configuration}`+ ` -sdk ${sdk}`+ ` -arch ${arch}`+ ` -derivedDataPath ${derivedDataPath} -UseModernBuildSystem=${useModernBuildSystem}`
-    + ` COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO `
+    + ` diagnostic_message_length=0 COMPILER_INDEX_STORE_ENABLE=NO CLANG_INDEX_STORE_ENABLE=NO GCC_WARN_INHIBIT_ALL_WARNINGS=YES CLANG_DEBUG_MODULES=NO `
     + ` | tee xcodebuild.txt | xcpretty --no-utf --report json-compilation-database --output compile_commands_update.json`;
     let workPath : string = workspaceFolder.concat("/.vscode");
     let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
