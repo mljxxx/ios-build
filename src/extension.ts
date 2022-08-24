@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
+const {basename} = require("path");
 import * as vscode from 'vscode';
 import { CancellationToken, DebugAdapterTracker, DebugAdapterTrackerFactory, Diagnostic, DiagnosticCollection, HoverProvider, InlineValuesProvider, Progress, ProgressLocation, Uri} from 'vscode';
 const {exec,spawn} = require("child_process");
@@ -9,6 +10,7 @@ let xcodebuildPid : number = -1;
 let iOSdeployPid : number = -1;
 let currentFrameId : number = -1;
 let manualEvaluate : Boolean = false;
+let completionMap : Map<string,string> = new Map<string,string>();
 
 export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
@@ -26,6 +28,16 @@ export function activate(context: vscode.ExtensionContext) {
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
     let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem","YES");
+    let workspaceRoot : string | undefined = getDocumentWorkspaceFolder();
+    if(workspaceRoot !== undefined) {
+        let completionMapPath = workspaceRoot.concat("/.vscode/completion_map.json"); 
+        refreshCompletionMap();
+        fs.watchFile(completionMapPath,{                    // （可选）
+          persistent: true,  // 程序执行完后，当前进程是否挂住，默认为 true（挂住）
+          interval: 5000,     // 每个多久检测一次，默认值 5000 ms
+        }, 
+        refreshCompletionMap)
+    }
     
 	let buildDisposable = vscode.commands.registerCommand('ios-build.build', async () => {
         diagnosticCollection.clear();
@@ -303,6 +315,13 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
         let endPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
         let range: vscode.Range = new vscode.Range(startPosition, endPosition);
         let path: vscode.Uri = vscode.Uri.file(fs.realpathSync(filePath));
+        let filename = basename(filePath);
+        if(completionMap !== undefined && completionMap.has(filename)) {
+            let resolvePath:string | undefined = completionMap.get(filename);
+            if(resolvePath !== undefined) {
+                path = vscode.Uri.file(resolvePath);
+            }
+        }
         let diagnostic: vscode.Diagnostic = new vscode.Diagnostic(range, errorInfo);
         diagnosticCollection.set(path,[diagnostic]);
         if(firstErrorMessagePosition === undefined) {
@@ -316,14 +335,20 @@ function produceCompileCommand(workPath:string){
     let compileCommandArray : CommandModel[] = [];
     let compileCommandUpdatePath : string = workPath.concat("/compile_commands_update.json");
     if(fs.existsSync(compileCommandUpdatePath)) {
-        let updateCompileCommand : CommandModel[] = JSON.parse(fs.readFileSync(compileCommandUpdatePath,"utf-8"));
-        compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
-        fs.unlink(compileCommandUpdatePath,(err: NodeJS.ErrnoException | null) => {});
+        let compileCommandUpdatePathFie : string = fs.readFileSync(compileCommandUpdatePath,"utf-8");
+        if(compileCommandUpdatePathFie.length > 0) {
+            let updateCompileCommand: CommandModel[] = JSON.parse(compileCommandUpdatePathFie);
+            compileCommandArray = compileCommandArray.concat(updateCompileCommand);
+        }
+        fs.unlink(compileCommandUpdatePath, (err: NodeJS.ErrnoException | null) => { });
     }
     let compileCommandPath : string = workPath.concat("/compile_commands.json");
     if(fs.existsSync(compileCommandPath)) {
-        let updateCompileCommand : CommandModel[] = JSON.parse(fs.readFileSync(compileCommandPath,"utf-8"));
-        compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
+        let compileCommandPathFile : string = fs.readFileSync(compileCommandPath,"utf-8");
+        if(compileCommandPathFile.length > 0) {
+            let updateCompileCommand: CommandModel[] = JSON.parse(compileCommandPathFile);
+            compileCommandArray = compileCommandArray.concat(updateCompileCommand);  
+        }
     }
     let compileCommand : CommandModel[] = [];
     let modelMap = new Map();
@@ -334,7 +359,11 @@ function produceCompileCommand(workPath:string){
         }
     });
     let compileCommandJSON : string = JSON.stringify(compileCommand);
-    fs.writeFile(compileCommandPath,compileCommandJSON,"utf-8",(err: NodeJS.ErrnoException | null) => {});
+    fs.writeFile(compileCommandPath, compileCommandJSON, "utf-8", (err: NodeJS.ErrnoException | null) => {
+        if(err !== null) {
+            vscode.window.showErrorMessage(err.message);
+        }
+    });
 }
 
 async function evaluateSelectedText() {
@@ -357,6 +386,19 @@ function getDocumentWorkspaceFolder(): string | undefined {
         return undefined;
     }
 }
+
+function refreshCompletionMap() {
+    let workspace : string | undefined = getDocumentWorkspaceFolder();
+    if(workspace !== undefined) {
+        let completionMapPath = workspace.concat("/.vscode/completion_map.json"); 
+        if(fs.existsSync(completionMapPath)) {
+          let completionMapDict = JSON.parse(fs.readFileSync(completionMapPath,"utf-8"));
+          for (const key in completionMapDict) {
+            completionMap.set(key,completionMapDict[key])
+          }
+        }
+    }
+  }
 
 interface ErrorMessagePosition {
     uri:Uri;
