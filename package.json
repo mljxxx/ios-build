@@ -120,6 +120,10 @@
                 ],
                 "default": "YES",
                 "description": "useModernBuildSystem"
+              },
+              "completionPrefixMapPath": {
+                "type": "string",
+                "default": ""
               }
             }
           }

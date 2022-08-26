@@ -31,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
     let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem","YES");
-    completionPrefixMapPath = vscode.workspace.getConfiguration("clangd").get("completionPrefixMapPath", "");
+    completionPrefixMapPath = workspaceConfig.get("completionPrefixMapPath", "");
     let workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
     if (workspaceFolder !== undefined) {
         completionPrefixMapPath = completionPrefixMapPath.replace('${workspaceFolder}', workspaceFolder);
