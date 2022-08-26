@@ -2,7 +2,7 @@
   "name": "ios-build",
   "displayName": "ios-build",
   "description": "",
-  "version": "0.1.9",
+  "version": "0.2.1",
   "publisher": "norminal",
   "repository": {
     "type": "git",
@@ -15,6 +15,9 @@
     "Other"
   ],
   "activationEvents": [
+    "onLanguage:objective-c",
+    "onLanguage:objective-cpp",
+    "onLanguage:swift",
     "onCommand:ios-build.build",
     "onCommand:ios-build.buildAndRun",
     "onCommand:ios-build.installAndRun",

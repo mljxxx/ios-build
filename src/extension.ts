@@ -10,7 +10,10 @@ let xcodebuildPid : number = -1;
 let iOSdeployPid : number = -1;
 let currentFrameId : number = -1;
 let manualEvaluate : Boolean = false;
-let completionMap : Map<string,string> = new Map<string,string>();
+let completionPrefixMapPath: string = "";
+let completionPrefixMapTrie: trieNode;
+let fileWatcher: vscode.FileSystemWatcher;
+let debounceTimer: NodeJS.Timer | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugAdapterTrackerFactory("*",new CustomDebugAdapterTrackerFactory());
@@ -28,16 +31,18 @@ export function activate(context: vscode.ExtensionContext) {
     let arch : string |undefined = workspaceConfig.get("arch");
     let derivedDataPath : string |undefined = workspaceConfig.get("derivedDataPath");
     let useModernBuildSystem : string | undefined = workspaceConfig.get("useModernBuildSystem","YES");
-    let workspaceRoot : string | undefined = getDocumentWorkspaceFolder();
-    if(workspaceRoot !== undefined) {
-        let completionMapPath = workspaceRoot.concat("/.vscode/completion_map.json"); 
-        refreshCompletionMap();
-        fs.watchFile(completionMapPath,{                    // （可选）
-          persistent: true,  // 程序执行完后，当前进程是否挂住，默认为 true（挂住）
-          interval: 5000,     // 每个多久检测一次，默认值 5000 ms
-        }, 
-        refreshCompletionMap)
+    completionPrefixMapPath = vscode.workspace.getConfiguration("clangd").get("completionPrefixMapPath", "");
+    let workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+    if (workspaceFolder !== undefined) {
+        completionPrefixMapPath = completionPrefixMapPath.replace('${workspaceFolder}', workspaceFolder);
     }
+    let completionPrefixMapFilePath = completionPrefixMapPath.concat("/completion_prefix_map.json");
+    if(fs.existsSync(completionPrefixMapFilePath)) {
+        fileWatcher = vscode.workspace.createFileSystemWatcher(completionPrefixMapFilePath,false,false,false);
+        fileWatcher.onDidCreate(debouncedHandleConfigFilesChanged);
+        fileWatcher.onDidChange(debouncedHandleConfigFilesChanged);
+    }
+    updateCompletionPrefixMap();
     
 	let buildDisposable = vscode.commands.registerCommand('ios-build.build', async () => {
         diagnosticCollection.clear();
@@ -315,10 +320,11 @@ function postErrorMessage(diagnosticCollection : vscode.DiagnosticCollection,tex
         let endPosition: vscode.Position = new vscode.Position(Number(lineNumber) - 1, Number(columnNumber) - 1);
         let range: vscode.Range = new vscode.Range(startPosition, endPosition);
         let path: vscode.Uri = vscode.Uri.file(fs.realpathSync(filePath));
-        let filename = basename(filePath);
-        if(completionMap !== undefined && completionMap.has(filename)) {
-            let resolvePath:string | undefined = completionMap.get(filename);
-            if(resolvePath !== undefined) {
+        let prefixAndReplacePath = getPrefixPathAndReplacePathWithPath(path.path);
+        if (prefixAndReplacePath !== undefined) {
+            let [prefixPath, replacePath] = prefixAndReplacePath;
+            let resolvePath = filePath.replace(prefixPath, replacePath);
+            if (fs.existsSync(resolvePath)) {
                 path = vscode.Uri.file(resolvePath);
             }
         }
@@ -353,9 +359,20 @@ function produceCompileCommand(workPath:string){
     let compileCommand : CommandModel[] = [];
     let modelMap = new Map();
     compileCommandArray.forEach(model => {
-        if(fs.existsSync(model.file) && !modelMap.has(model.file)) {
-            modelMap.set(model.file,1);
-            compileCommand.push(model);
+        if (fs.existsSync(model.file)) {
+            let filePath = fs.realpathSync(model.file);
+            let prefixAndReplacePath = getPrefixPathAndReplacePathWithPath(filePath);
+            if (prefixAndReplacePath !== undefined) {
+                let [prefixPath, replacePath] = prefixAndReplacePath;
+                let resolvePath = filePath.replace(prefixPath, replacePath);
+                if (fs.existsSync(resolvePath)) {
+                    filePath = resolvePath;
+                }
+            }
+            if(!modelMap.has(filePath)) {
+                modelMap.set(filePath,1);
+                compileCommand.push(model);
+            }
         }
     });
     let compileCommandJSON : string = JSON.stringify(compileCommand);
@@ -387,18 +404,61 @@ function getDocumentWorkspaceFolder(): string | undefined {
     }
 }
 
-function refreshCompletionMap() {
-    let workspace : string | undefined = getDocumentWorkspaceFolder();
-    if(workspace !== undefined) {
-        let completionMapPath = workspace.concat("/.vscode/completion_map.json"); 
-        if(fs.existsSync(completionMapPath)) {
-          let completionMapDict = JSON.parse(fs.readFileSync(completionMapPath,"utf-8"));
-          for (const key in completionMapDict) {
-            completionMap.set(key,completionMapDict[key])
-          }
+async function debouncedHandleConfigFilesChanged(uri: vscode.Uri) {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    debounceTimer = setTimeout(async () => {
+      await handleConfigFilesChanged(uri);
+      debounceTimer = undefined;
+    }, 2000);
+}
+
+async function handleConfigFilesChanged(uri: vscode.Uri) {
+    updateCompletionPrefixMap();
+}
+
+
+function updateCompletionPrefixMap() {
+    if (completionPrefixMapTrie === undefined) {
+        completionPrefixMapTrie = new trieNode(undefined);
+    }
+    let completionPrefixMapFilePath = completionPrefixMapPath.concat("/completion_prefix_map.json");
+    if (fs.existsSync(completionPrefixMapFilePath)) {
+        let completionPrefixMap = JSON.parse(fs.readFileSync(completionPrefixMapFilePath, "utf-8"));
+        for (const key in completionPrefixMap) {
+            let prefixPath = key, replacePath = completionPrefixMap[key];
+            let node: trieNode | undefined = completionPrefixMapTrie;
+            let prefixPathComponentArray = prefixPath.split("/");
+            for (const component of prefixPathComponentArray) {
+                if (!node!.next.has(component)) {
+                    node!.next.set(component, new trieNode(undefined));
+                }
+                node = node!.next.get(component);
+            }
+            node!.value = replacePath;
         }
     }
-  }
+}
+
+function getPrefixPathAndReplacePathWithPath(filePath: string): [string, string] | undefined {
+    let filePathComponentArray = filePath.split("/");
+    let node: trieNode | undefined = completionPrefixMapTrie;
+    let prefixPathComponentArray: string[] = [];
+    for (const component of filePathComponentArray) {
+        if (node!.next.has(component)) {
+            prefixPathComponentArray.push(component);
+            node = node!.next.get(component);
+        }
+    }
+    let prefixPath = prefixPathComponentArray.join('/');
+    if (node!.value) {
+        return [prefixPath, node!.value];
+    } else {
+        return undefined;
+    }
+}
 
 interface ErrorMessagePosition {
     uri:Uri;
@@ -452,3 +512,13 @@ class CustomQuickPickItem implements vscode.QuickPickItem {
         this.command = command;
     }
 }
+
+// eslint-disable-next-line @typescript-eslint/naming-convention
+export class trieNode {
+    next!: Map<string, trieNode>;
+    value: string | undefined;
+    constructor(value:string | undefined) {
+      this.next = new Map<string, trieNode>();
+      this.value = value;
+    }
+  }
