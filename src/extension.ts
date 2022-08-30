@@ -8,6 +8,7 @@ const {exec,spawn} = require("child_process");
 let firstErrorMessagePosition : ErrorMessagePosition | undefined = undefined;
 let xcodebuildPid : number = -1;
 let iOSdeployPid : number = -1;
+let ideviceinstallerPid : number = -1;
 let currentFrameId : number = -1;
 let manualEvaluate : Boolean = false;
 let completionPrefixMapPath: string = "";
@@ -163,6 +164,10 @@ async function stopBuild() {
 }
 async function stopRun() {
     vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
+    if(ideviceinstallerPid !== -1) {
+        await process.kill(-ideviceinstallerPid,"SIGKILL");
+        ideviceinstallerPid = -1;
+    }
     if(iOSdeployPid !== -1) {
         await process.kill(-iOSdeployPid,"SIGKILL");
         iOSdeployPid = -1;
@@ -178,50 +183,71 @@ async function runApp(install:Boolean,workspaceFolder: string,scheme:string | un
     derivedDataPath = derivedDataPath.replace('${workspaceFolder}', workspaceFolder);
     sdk = sdk.replace(new RegExp(/[0-9]*\.?[0-9]*/,"g"),'');
     let executePath : string = `${derivedDataPath}/Build/Products/${configuration}-${sdk}/${scheme}.app`;
-    let installArg = install ? '' : '-m';
-    let shellCommand :string = `ios-deploy-custom -N -W ${installArg} -b ${executePath} -P ${workPath}`;
+    let iosdeployShellCommand :string = `ios-deploy-custom -N -W -m -b ${executePath} -P ${workPath}`;
     outputChannel.show();
     outputChannel.clear();
-    let proc = spawn("sh", ["-c",shellCommand], { cwd: workPath, detached: true });
+    if(install) {
+        let ideviceinstallerShellCommand :string = `ideviceinstaller-custom -i ${executePath}`;
+        let proc = spawn("sh", ["-c", ideviceinstallerShellCommand], { cwd: workPath, detached: true });
+        proc.unref();
+        ideviceinstallerPid = proc.pid;
+        vscode.window.withProgress({location: ProgressLocation.Notification,title: "INSTALLING APP",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
+            token.onCancellationRequested(async () => {
+                await stopRun();
+            });
+            const p = new Promise<void>(resolve => {
+                let progressNum: Number = 0;
+                proc.stdout.on('data', async (data: Buffer) => {
+                    const text: string = data.toString("utf-8");
+                    if (text.search("Complete") !== -1) {
+                        resolve();
+                        debugApp(iosdeployShellCommand,outputChannel);
+                    }
+                    let pattern = RegExp(/INSTALL PROCESS (\d+)%/, "g");
+                    let progressStr: RegExpExecArray | null = null;
+                    while (progressStr = pattern.exec(text)) {
+                        let currentprogressNum = Number(progressStr[1]);
+                        progress.report({ increment: currentprogressNum - progressNum.valueOf()});
+                        progressNum = currentprogressNum;
+                    }
+                });
+                proc.stderr.on('data', (data: Buffer) => {
+                    outputChannel.append(data.toString("utf-8"));
+                    resolve();
+                });
+                proc.on('close', () => {
+                    resolve();
+                });
+            });
+            return p;
+        });
+    } else {
+        debugApp(iosdeployShellCommand,outputChannel);
+    }
+}
+
+async function debugApp(shellCommand: string, outputChannel: vscode.OutputChannel) {
+    let proc = spawn("sh", ["-c", shellCommand], {detached: true });
     proc.unref();
     iOSdeployPid = proc.pid;
-    vscode.window.withProgress({location: ProgressLocation.Notification,title: "INSTALLING APP",cancellable: true}, (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => {
-        token.onCancellationRequested(async () => {
-            await stopRun();
-        });
-        const p = new Promise<void>(resolve => {
-            let progressNum: Number = 0;
-            proc.stdout.on('data', async (data: Buffer) => {
-                const text: string = data.toString("utf-8");
-                if (text.search("Launch JSON Write Completed") !== -1) {
-                    resolve();
-                    await sleep(1000);
-                    
-                    vscode.commands.executeCommand("workbench.action.debug.start");
-                }
-                let pattern = RegExp(/\[\s*(\d+)%\]/, "g");
-                let progressStr: RegExpExecArray | null = null;
-                while (progressStr = pattern.exec(text)) {
-                    let currentprogressNum = Number(progressStr[1]);
-                    progress.report({ increment: currentprogressNum - progressNum.valueOf()});
-                    progressNum = currentprogressNum;
-                }
-                let disconnectPattern = RegExp(/Disconnected\s.*?\sfrom USB/,"g");
-                if(disconnectPattern.test(text)){
-                    stopRun();    
-                }
-            });
-            proc.stderr.on('data', (data: Buffer) => {
-                outputChannel.append(data.toString("utf-8"));
-                resolve();
-            });
-            proc.on('close', () => {
-                resolve();
-            });
-        });
-        return p;
+    proc.stdout.on('data', async (data: Buffer) => {
+        const text: string = data.toString("utf-8");
+        if (text.search("Launch JSON Write Completed") !== -1) {
+            vscode.commands.executeCommand("workbench.action.debug.start");
+        }
+
+        let disconnectPattern = RegExp(/Disconnected\s.*?\sfrom USB/, "g");
+        if (disconnectPattern.test(text)) {
+            stopRun();
+        }
+    });
+    proc.stderr.on('data', (data: Buffer) => {
+        outputChannel.append(data.toString("utf-8"));
+    });
+    proc.on('close', () => {
     });
 }
+
 
 async function buildApp(run:Boolean,buildAction:string,workspaceFolder: string,clang : string|undefined,sysroot : string|undefined,workspace : string|undefined,
     scheme : string|undefined,configuration : string|undefined,sdk : string|undefined,arch : string|undefined,
