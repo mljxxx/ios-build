@@ -158,19 +158,25 @@ function sleep(ms: number | undefined) : Promise<string> {
 
 async function stopBuild() {
     if(xcodebuildPid !== -1) {
-        await process.kill(-xcodebuildPid,"SIGKILL");
+        process.kill(-xcodebuildPid,"SIGKILL");
         xcodebuildPid = -1;
     }
 }
 async function stopRun() {
     vscode.commands.executeCommand("workbench.debug.panel.action.clearReplAction");
-    if(ideviceinstallerPid !== -1) {
-        await process.kill(-ideviceinstallerPid,"SIGKILL");
-        ideviceinstallerPid = -1;
+    try {
+        if(ideviceinstallerPid !== -1) {
+            process.kill(-ideviceinstallerPid,"SIGKILL");
+            ideviceinstallerPid = -1;
+        }
+    } catch (error) {
     }
-    if(iOSdeployPid !== -1) {
-        await process.kill(-iOSdeployPid,"SIGKILL");
-        iOSdeployPid = -1;
+    try {
+        if (iOSdeployPid !== -1) {
+            process.kill(-iOSdeployPid, "SIGKILL");
+            iOSdeployPid = -1;
+        }
+    } catch (error) {
     }
 }
 
